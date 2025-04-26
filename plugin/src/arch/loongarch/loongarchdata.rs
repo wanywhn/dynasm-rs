@@ -166,7 +166,7 @@ impl Relocation {
 #[derive(Debug, Clone, Copy)]
 pub struct Opdata {
     /// The base template for the encoding
-    pub template: Template,
+    pub template: u32,
     /// What ISA targets this op is valid for
     pub isa_flags: ISAFlags,
     /// What extensions are required for this instruction
@@ -177,8 +177,59 @@ pub struct Opdata {
     pub commands: &'static [Command],
 }
 
+// macro_rules! SingleOp {
+//     ( $template:expr, $isa:expr, [ $( $matcher:expr ),* ], [ $( $command:expr ),* ], [ $( $extension:expr ),* ] ) => {
+//         {
+//             const MATCHERS: &'static [Matcher] = {
+//                 #[allow(unused_imports)]
+//                 use self::Matcher::*;
+//                 &[ $(
+//                     $matcher
+//                 ),* ]
+//             };
+//             const COMMANDS: &'static [Command] = {
+//                 #[allow(unused_imports)]
+//                 use self::Command::*;
+//                 #[allow(unused_imports)]
+//                 use self::Relocation::*;
+//                 &[ $(
+//                     $command
+//                 ),* ]
+//             };
+//             const EXTENSIONS: &'static [ExtensionFlags] = {
+//                 #[allow(unused_imports)]
+//                 &[ $(
+//                     ExtensionFlags::make($extension)
+//                 ),* ]
+//             };
+
+//             use self::Template::*;
+//             Opdata {
+//                 template: $template,
+//                 isa_flags: ISAFlags::make($isa),
+//                 ext_flags: EXTENSIONS,
+//                 matchers: MATCHERS,
+//                 commands: COMMANDS,
+//             }
+//         }
+//     }
+// }
+
+// macro_rules! Ops {
+//     ( $( $name:tt = [ $( $template:expr , $isa:expr , [ $( $matcher:expr ),* ] => [ $( $command:expr ),* ] , [ $( $extension:expr ),* ] ; )+ ] , )* ) => {
+//         [ $(
+//             (
+//                 $name,
+//                 &[ $(
+//                     SingleOp!( $template, $isa, [ $( $matcher ),* ], [ $( $command ),* ], [ $( $extension ),* ] )
+//                 ),+ ] as &[_]
+//             )
+//         ),* ]
+//     }
+// }
+
 macro_rules! SingleOp {
-    ( $template:expr, $isa:expr, [ $( $matcher:expr ),* ], [ $( $command:expr ),* ], [ $( $extension:expr ),* ] ) => {
+    ( $base:expr, [ $( $matcher:expr ),* ], [ $( $command:expr ),* ] ) => {
         {
             const MATCHERS: &'static [Matcher] = {
                 #[allow(unused_imports)]
@@ -190,24 +241,14 @@ macro_rules! SingleOp {
             const COMMANDS: &'static [Command] = {
                 #[allow(unused_imports)]
                 use self::Command::*;
-                #[allow(unused_imports)]
-                use self::Relocation::*;
                 &[ $(
                     $command
                 ),* ]
             };
-            const EXTENSIONS: &'static [ExtensionFlags] = {
-                #[allow(unused_imports)]
-                &[ $(
-                    ExtensionFlags::make($extension)
-                ),* ]
-            };
-
-            use self::Template::*;
             Opdata {
-                template: $template,
-                isa_flags: ISAFlags::make($isa),
-                ext_flags: EXTENSIONS,
+                isa_flags: ISAFlags::make(0),
+                ext_flags: ExtensionFlags::Ex_BASE,
+                template: $base,
                 matchers: MATCHERS,
                 commands: COMMANDS,
             }
@@ -216,12 +257,12 @@ macro_rules! SingleOp {
 }
 
 macro_rules! Ops {
-    ( $( $name:tt = [ $( $template:expr , $isa:expr , [ $( $matcher:expr ),* ] => [ $( $command:expr ),* ] , [ $( $extension:expr ),* ] ; )+ ] , )* ) => {
+    ( $( $name:tt = [ $( $base:tt = [ $( $matcher:expr ),* ] => [ $( $command:expr ),* ] ; )+ ] )* ) => {
         [ $(
             (
                 $name,
                 &[ $(
-                    SingleOp!( $template, $isa, [ $( $matcher ),* ], [ $( $command ),* ], [ $( $extension ),* ] )
+                    SingleOp!( $base, [ $( $matcher ),* ], [ $( $command ),* ] )
                 ),+ ] as &[_]
             )
         ),* ]
