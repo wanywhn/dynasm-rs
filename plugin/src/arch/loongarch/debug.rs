@@ -79,6 +79,10 @@ pub fn format_opdata(name: &str, data: &Opdata) -> String {
             Matcher::Imm => buf.push_str("imm"),
             Matcher::Offset => buf.push_str("target"),
             Matcher::Ident => buf.push_str("ident"),
+            Matcher::C => buf.push_str("fcc"),
+            Matcher::T => buf.push_str("scratch"),
+            Matcher::V => buf.push_str("lsx-reg"),
+            Matcher::X => buf.push_str("lasx-reg"),
         }
     }
 
@@ -91,37 +95,53 @@ pub fn format_opdata(name: &str, data: &Opdata) -> String {
     buf
 }
 
+pub fn sum_adjacent_diffs(array: &&[u8]) -> u16 {
+    assert!(array.len() % 2 == 0, "Array length must be even");
+    
+    let mut sum = 0;
+    for chunk in array.chunks_exact(2) {
+        sum += (chunk[0] as i16 - chunk[1] as i16).abs() as u16;
+    }
+    sum
+}
+
 fn format_constraints(data: &Opdata) -> String {
     let mut constraints = Vec::new();
 
     for command in data.commands {
         match command {
             Command::R(_) => (),
-            Command::Rno0(_) => constraints.push("rd cannot be r0"),
-            Command::UImm(bits, align) => {
-                if align == 0 {
-                    constraints.push(&format!("0 <= imm <= {}", (1u32 << bits) - 1));
-                } else {
-                    constraints.push(&format!("0 <= imm <= {}, imm = {} * N", 
-                        (1u32 << bits) - (1u32 << align), 1u32 << align));
-                }
+            Command::Rno0(_) => constraints.push("rd cannot be r0".to_string()),
+            Command::UImm(start, end) => {
+                let s = format!("0 <= imm <= {}", (1u32 << (end - start)) - 1);
+                constraints.push(s);
             },
-            Command::SImm(bits, align) => {
-                if align == 0 {
-                    constraints.push(&format!("-{} <= imm <= {}", 
-                        1u32 << (bits - 1), (1u32 << (bits - 1)) - 1));
-                } else {
-                    constraints.push(&format!("-{} <= imm <= {}, imm = {} * N",
-                        1u32 << (bits - 1), (1u32 << (bits - 1)) - (1u32 << align), 1u32 << align));
-                }
+            Command::SImm(start, end) => {
+                let s = format!("{} <= imm <= {}", - 1i32 << (end - start) /2  - 1, 1i32 << (end - start) /2);
+                constraints.push(s);
+            },
+            Command::Ufields(array) => {
+                let sum = sum_adjacent_diffs(array);
+                let s = format!("0 <= imm <= {}", sum);
+                constraints.push(s);
+            },
+            Command::Sfields(array) => {
+                let sum = sum_adjacent_diffs(array) as i16;
+                let s = format!("{} <= imm <= {}", - sum / 2  - 1, sum / 2);
+                constraints.push(s);
             },
             Command::Offset(reloc) => match reloc {
-                Relocation::B => constraints.push("16-bit offset, 2-byte aligned"),
-                Relocation::J => constraints.push("26-bit offset, 2-byte aligned"),
-                Relocation::PC32 => constraints.push("32-bit PC-relative offset"),
+                Relocation::B => constraints.push("16-bit offset, 2-byte aligned".to_string()),
+                Relocation::J => constraints.push("26-bit offset, 2-byte aligned".to_string()),
+                Relocation::PC32 => constraints.push("32-bit PC-relative offset".to_string()),
                 _ => (),
             },
             Command::Next | Command::Repeat => (),
+            Command::F(_) => todo!(),
+            Command::C(_) => todo!(),
+            Command::T(_) => todo!(),
+            Command::V(_) => todo!(),
+            Command::X(_) => todo!(),
         }
     }
 
@@ -201,6 +221,10 @@ pub fn extract_opdata(name: &str, data: &Opdata) -> String {
             Matcher::Imm => write!(buf, "<Imm,{}>", arg_idx).unwrap(),
             Matcher::Offset => write!(buf, "<Off,{}>", arg_idx).unwrap(),
             Matcher::Ident => write!(buf, "<Ident,{}>", arg_idx).unwrap(),
+            Matcher::C => todo!(),
+            Matcher::T => todo!(),
+            Matcher::V => todo!(),
+            Matcher::X => todo!(),
         }
 
         arg_idx += match matcher {
@@ -228,11 +252,16 @@ fn extract_constraints(data: &Opdata) -> Vec<String> {
             Command::Rno0(_) => format!("R(0xFFFFFFFE)"),
             Command::UImm(bits, scale) => format!("Range(0, {}, {})", 1u32 << bits, 1u32 << scale),
             Command::SImm(bits, scale) => format!("Range(-{}, {}, {})", 
-                1u32 << (bits - 1), 1u32 << (bits - 1), 1u32 << scale),
-            Command::Offset(Relocation::B) => format!("Range(-{}, {}, {})", 1u32 << 15, 1u32 << 15, 2),
-            Command::Offset(Relocation::J) => format!("Range(-{}, {}, {})", 1u32 << 25, 1u32 << 25, 2),
-            Command::Offset(Relocation::PC32) => format!("Range(-{}, {}, 1)", 1u32 << 31, 1u32 << 31),
+                        1u32 << (bits - 1), 1u32 << (bits - 1), 1u32 << scale),
+            Command::Offset(_) => format!("R(0xFFFFFFFF)"),
             Command::Next | Command::Repeat => continue,
+            Command::F(_) => format!("R(0xFFFFFFFF)"),
+            Command::C(_) => format!("R(0xFFFFFFFF)"),
+            Command::T(_) => format!("R(0xFFFFFFFF)"),
+            Command::V(_) => format!("R(0xFFFFFFFF)"),
+            Command::X(_) => format!("R(0xFFFFFFFF)"),
+            Command::Ufields(items) => format!("R(0xFFFFFFFF)"),
+            Command::Sfields(items) => format!("R(0xFFFFFFFF)"),
         };
         constraints.push(format!("{}: {}", arg_idx, constraint));
         arg_idx += 1;

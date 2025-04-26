@@ -1,5 +1,5 @@
 use super::Context;
-use super::loongarchdata::{Template, Command, Relocation};
+use super::loongarchdata::{Command, Relocation};
 use super::ast::{MatchData, FlatArg, Register};
 
 use syn::spanned::Spanned;
@@ -8,7 +8,7 @@ use proc_macro2::{TokenStream, Span};
 use proc_macro_error2::emit_error;
 
 use crate::parse_helpers::{as_signed_number};
-use crate::common::{Stmt, Size, delimited, bitmask, bitmask64};
+use crate::common::{Stmt, Size, delimited, bitmask};
 
 /// Compile a single instruction. Input is taken from `data`, containing both the arguments
 /// and the encoding template and commands.
@@ -143,8 +143,6 @@ pub(super) fn compile_instruction(ctx: &mut Context, data: MatchData) -> Result<
                         }
                     }
                 },
-                Command::BitRange(offset, bits, scaling) => (),
-                Command::RBitRange(offset, bits, scaling) => (),
                 Command::Offset(relocation_type) => {
                     let bits;
                     let scaling;
@@ -157,7 +155,7 @@ pub(super) fn compile_instruction(ctx: &mut Context, data: MatchData) -> Result<
                             bits = 16;
                             scaling = 2;
                             commands = &[
-                                Command::BitRange(10, 16, 2),
+                                // Command::BitRange(10, 16, 2),
                                 Command::Next
                             ];
                         },
@@ -166,8 +164,6 @@ pub(super) fn compile_instruction(ctx: &mut Context, data: MatchData) -> Result<
                             bits = 26;
                             scaling = 2;
                             commands = &[
-                                Command::BitRange(10, 16, 2),
-                                Command::BitRange(26, 10, 18),
                                 Command::Next
                             ];
                         },
@@ -176,8 +172,6 @@ pub(super) fn compile_instruction(ctx: &mut Context, data: MatchData) -> Result<
                             bits = 32;
                             scaling = 0;
                             commands = &[
-                                Command::RBitRange(10, 12, 2),
-                                Command::BitRange(22, 20, 12),
                                 Command::Next
                             ];
                         },
@@ -230,9 +224,7 @@ pub(super) fn compile_instruction(ctx: &mut Context, data: MatchData) -> Result<
         // figure out how far the cursor has to be advanced.
         match *command {
             Command::UImm(_, _)
-            | Command::SImm(_, _)
-            | Command::BitRange(_, _, _)
-            | Command::RBitRange(_, _, _) => (),
+            | Command::SImm(_, _) => (),
             _ => cursor += 1
         }
     }
@@ -242,76 +234,26 @@ pub(super) fn compile_instruction(ctx: &mut Context, data: MatchData) -> Result<
         panic!("Not enough command processors");
     }
 
-    let mut templates = [0u32; 8];
-    let mut exprs = [None, None, None, None, None, None, None, None];
-
-    // for convenience sake we operate in 32 bits width
-    match data.data.template {
-        Template::Single(val) => templates[0] = val,
-        Template::Double(val1, val2) => {
-            templates[0] = val1;
-            templates[1] = val2;
-        },
-        Template::Many(values) => {
-            templates[..values.len()].copy_from_slice(values);
-        }
-    };
-
-    // apply all statics to templates
+    // apply all statics to bits
+    let mut bits = data.data.template;
     for (offset, value) in statics {
-        templates[(offset >> 5) as usize] |= value << (offset & 0x1F);
+        bits |= value << offset;
     }
 
-    // and process all dynamics
-    for (offset, expr) in dynamics {
-        let index = usize::from(offset >> 5);
-        let offset = offset & 0x1F;
-
-        exprs[index] = match exprs[index].take() {
-            Some(prev_expr) => {
-                Some(if offset == 0 {
-                    quote!{ #prev_expr | #expr }
-                } else {
-                    quote!{ #prev_expr | (#expr << #offset) }
-                })
-            },
-            None => {
-                let bits = templates[index];
-                Some(if offset == 0 {
-                    quote!{ #bits | #expr }
-                } else {
-                    quote!{ #bits | (#expr << #offset) }
-                })
-            }
+    // generate code to be emitted for dynamics
+    if !dynamics.is_empty() {
+        let mut res = quote!{
+            #bits
+        };
+        for (offset, expr) in dynamics {
+            res = quote!{
+                #res | ((#expr) << #offset)
+            };
         }
+        ctx.state.stmts.push(Stmt::ExprUnsigned(delimited(res), Size::B_4));
+    } else {
+        ctx.state.stmts.push(Stmt::Const(u64::from(bits), Size::B_4));
     }
-
-    match data.data.template {
-        Template::Single(_) => if let Some(d) = exprs[0].take() {
-            ctx.state.stmts.push(Stmt::ExprUnsigned(delimited(d), Size::B_4));
-        } else {
-            ctx.state.stmts.push(Stmt::Const(u64::from(templates[0]), Size::B_4));
-        },
-        Template::Double(_, _) => {
-            for i in 0..2 {
-                if let Some(d) = exprs[i].take() {
-                    ctx.state.stmts.push(Stmt::ExprUnsigned(delimited(d), Size::B_4));
-                } else {
-                    ctx.state.stmts.push(Stmt::Const(u64::from(templates[i]), Size::B_4));
-                }
-            }
-        },
-        Template::Many(c) => {
-            for i in 0..c.len() {
-                if let Some(d) = exprs[i].take() {
-                    ctx.state.stmts.push(Stmt::ExprUnsigned(delimited(d), Size::B_4));
-                } else {
-                    ctx.state.stmts.push(Stmt::Const(u64::from(templates[i]), Size::B_4));
-                }
-            }
-        }
-    }
-
     ctx.state.stmts.extend(relocations);
 
     Ok(())
@@ -350,35 +292,21 @@ impl<'a> ImmediateEncoder<'a> {
         }
     }
 
-    pub fn gather_fields(&mut self, commands: &[Command], mut index: usize, statics: &mut Vec<(u8, u32)>) {
+    pub fn gather_fields(&mut self, commands: &[Command], index: usize, statics: &mut Vec<(u8, u32)>) {
         loop {
             match commands.get(index) {
-                Some(&Command::BitRange(offset, bits, scaling)) => {
-                    let mask = bitmask(bits);
+                // Some(&Command::BitRange(offset, bits, scaling)) => {
+                //     let mask = bitmask(bits);
 
-                    if let Some(v) = self.static_value {
-                        let slice = (v >> scaling) as u32 & mask;
-                        statics.push((offset, slice));
-                    } else {
-                        self.encodes.push((offset, quote_spanned!{ self.span=>
-                            ((_dyn_imm >> #scaling) as u32 & #mask)
-                        }));
-                    }
-                },
-                Some(&Command::RBitRange(offset, bits, scaling)) => {
-                    let mask = bitmask(bits);
-                    let round_offset: i64 = 1 << (scaling - 1);
-
-                    if let Some(v) = self.static_value {
-                        let slice = (v.wrapping_add(round_offset) >> scaling) as u32 & mask;
-                        statics.push((offset, slice));
-                    } else {
-                        let round_offset = proc_macro2::Literal::i64_unsuffixed(round_offset);
-                        self.encodes.push((offset, quote_spanned!{ self.span=>
-                            ((_dyn_imm.wrapping_add(#round_offset) >> #scaling) as u32 & #mask)
-                        }));
-                    }
-                },
+                //     if let Some(v) = self.static_value {
+                //         let slice = (v >> scaling) as u32 & mask;
+                //         statics.push((offset, slice));
+                //     } else {
+                //         self.encodes.push((offset, quote_spanned!{ self.span=>
+                //             ((_dyn_imm >> #scaling) as u32 & #mask)
+                //         }));
+                //     }
+                // },
                 Some(Command::Next) => break,
                 Some(_)
                 | None => panic!("Bad encoding data, integer field sequence is not terminated"),

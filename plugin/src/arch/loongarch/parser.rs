@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 
 use syn::{parse, Token};
-use syn::spanned::Spanned;
 use lazy_static::lazy_static;
 
 use crate::parse_helpers::{parse_ident_or_rust_keyword, ParseOptExt};

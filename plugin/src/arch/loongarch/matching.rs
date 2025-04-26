@@ -111,6 +111,10 @@ impl Matcher {
             RawArg::Immediate { value } => match self {
                 Matcher::R => false,
                 Matcher::F => false,
+                Matcher::T => false,
+                Matcher::C => false,
+                Matcher::V => false,
+                Matcher::X => false,
                 Matcher::Reg(_) => false,
                 Matcher::Ref => false,
                 Matcher::RefOffset => false,

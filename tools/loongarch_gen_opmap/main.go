@@ -190,7 +190,7 @@ func argToProcessor(arg *common.Arg) string {
 		} else {
 			var parts []string
 			for _, slot := range arg.Slots {
-				parts = append(parts, fmt.Sprintf("(%d, %d)", slot.Offset, slot.Width))
+				parts = append(parts, fmt.Sprintf("%d, %d", slot.Offset, slot.Width))
 			}
 			return fmt.Sprintf("Sfields(&[%s])", strings.Join(parts, ", "))
 		}
@@ -200,7 +200,7 @@ func argToProcessor(arg *common.Arg) string {
 		} else {
 			var parts []string
 			for _, slot := range arg.Slots {
-				parts = append(parts, fmt.Sprintf("(%d, %d)", slot.Offset, slot.Width))
+				parts = append(parts, fmt.Sprintf("%d, %d", slot.Offset, slot.Width))
 			}
 			return fmt.Sprintf("Ufields(&[%s])", strings.Join(parts, ", "))
 		}

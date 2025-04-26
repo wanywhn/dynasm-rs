@@ -5,16 +5,6 @@ use std::collections::{HashMap, hash_map};
 use super::ast::RegId;
 use std::fmt;
 
-/// A template contains the information for the static parts of an instruction encoding
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Template {
-    /// A single 32-bit instruction
-    Single(u32),
-    /// Two 32-bit instructions
-    Double(u32, u32),
-    /// A sequence of instructions
-    Many(&'static [u32])
-}
 
 bitflags! {
     /// Flags indicating what ISA targets an instruction is valid on
@@ -87,6 +77,14 @@ pub enum Matcher {
     R,
     /// A floating point register
     F,
+    /// 条件标志寄存器
+    C,
+    /// A scratch register
+    T,
+    /// A LAX register
+    V,
+    /// A LASX register
+    X,
     /// A specific register
     Reg(RegId),
     /// An indirect reference to a register
@@ -117,12 +115,23 @@ pub enum Command {
     Rno0(u8),
     /// A 5-bit floating point register encoding
     F(u8),
-
+    /// A 3-bit floating point cond register encoding
+    C(u8),
+    /// A scratch register
+    T(u8),
+    /// A LAX register
+    V(u8),
+    /// A LASX register
+    X(u8),
     // Immediate handling
-    /// Unsigned immediate: bits, alignment
+    /// Unsigned immediate: start, end
     UImm(u8, u8),
-    /// Signed immediate: bits, alignment
+    /// Signed immediate: start, end
     SImm(u8, u8),
+    /// Unsigned immediate: [start, end]+
+    Ufields(&'static [u8]),
+    /// Signed immediate: [start, end]+
+    Sfields(&'static [u8]),
     /// Jump offset
     Offset(Relocation),
 }
@@ -247,7 +256,7 @@ macro_rules! SingleOp {
             };
             Opdata {
                 isa_flags: ISAFlags::make(0),
-                ext_flags: ExtensionFlags::Ex_BASE,
+                ext_flags: &[ExtensionFlags::Ex_BASE],
                 template: $base,
                 matchers: MATCHERS,
                 commands: COMMANDS,

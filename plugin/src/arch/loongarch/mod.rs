@@ -3,7 +3,6 @@
 #![allow(unused_variables)]
 #![allow(unreachable_code)]
 
-use std::collections::HashSet;
 use syn::parse;
 use proc_macro_error2::emit_error;
 
@@ -18,10 +17,6 @@ use crate::State;
 use crate::arch::{Stmt, Jump, Size};
 use crate::arch::Arch;
 
-#[cfg(feature = "dynasm_opmap")]
-pub use debug::create_opmap;
-#[cfg(feature = "dynasm_extract")]
-pub use debug::extract_opmap;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LoongArchTarget {
