@@ -108,7 +108,7 @@ func generateOpmapFile(path string, insns []*common.InsnDescription) error {
 				formattedBits, strings.Join(argList, ", "), strings.Join(procList, ", ")))
 		}
 
-		file.WriteString("],\n\n")
+		file.WriteString("]\n\n")
 	}
 
 	file.WriteString(")\n")
