@@ -9,6 +9,7 @@ use std::fmt::Debug;
 pub mod x64;
 pub mod aarch64;
 pub mod riscv;
+pub mod loongarch;
 
 pub(crate) trait Arch : Debug + Send {
     /// When the .features directive is used for an architecture, this architecture method will be
@@ -64,6 +65,8 @@ pub(crate) fn from_str(s: &str) -> Option<Box<dyn Arch>> {
         "riscv64e" => Some(Box::new(riscv::ArchRiscV64E::default())),
         "riscv32i" | "riscv32" => Some(Box::new(riscv::ArchRiscV32I::default())),
         "riscv32e" => Some(Box::new(riscv::ArchRiscV32E::default())),
+        "loongarch32" | "la32" => Some(Box::new(loongarch::ArchLoongArch32::default())),
+        "loongarch64" | "la64" => Some(Box::new(loongarch::ArchLoongArch64::default())),
         "unknown" => Some(Box::new(DummyArch::new())),
         _ => None
     }
@@ -81,11 +84,14 @@ pub const CURRENT_ARCH: &str = "aarch64";
 pub const CURRENT_ARCH: &str = "riscv64i";
 #[cfg(target_arch="riscv32")]
 pub const CURRENT_ARCH: &str = "riscv32i";
+#[cfg(target_arch="loongarch64")]
+pub const CURRENT_ARCH: &str = "loongarch64";
 #[cfg(not(any(
     target_arch="x86",
     target_arch="x86_64",
     target_arch="aarch64",
     target_arch="riscv64",
-    target_arch="riscv32"
+    target_arch="riscv32",
+    target_arch="loongarch64"
 )))]
 pub const CURRENT_ARCH: &str = "unknown";
