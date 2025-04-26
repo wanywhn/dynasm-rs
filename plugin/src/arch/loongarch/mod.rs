@@ -17,6 +17,10 @@ use crate::State;
 use crate::arch::{Stmt, Jump, Size};
 use crate::arch::Arch;
 
+#[cfg(feature = "dynasm_opmap")]
+pub use debug::create_opmap;
+#[cfg(feature = "dynasm_extract")]
+pub use debug::extract_opmap;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LoongArchTarget {

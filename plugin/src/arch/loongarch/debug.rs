@@ -212,20 +212,20 @@ pub fn extract_opdata(name: &str, data: &Opdata) -> String {
             buf.push_str(", ");
         }
 
-        match matcher {
-            Matcher::R => write!(buf, "<R,{}>", arg_idx).unwrap(),
-            Matcher::F => write!(buf, "<F,{}>", arg_idx).unwrap(),
-            Matcher::Reg(regid) => write!(buf, "{}", regid).unwrap(),
-            Matcher::Ref => write!(buf, "[<R,{}>]", arg_idx).unwrap(),
-            Matcher::RefOffset => write!(buf, "[<R,{}>, <Imm,{}>]", arg_idx, arg_idx + 1).unwrap(),
-            Matcher::Imm => write!(buf, "<Imm,{}>", arg_idx).unwrap(),
-            Matcher::Offset => write!(buf, "<Off,{}>", arg_idx).unwrap(),
-            Matcher::Ident => write!(buf, "<Ident,{}>", arg_idx).unwrap(),
-            Matcher::C => todo!(),
-            Matcher::T => todo!(),
-            Matcher::V => todo!(),
-            Matcher::X => todo!(),
-        }
+            match matcher {
+                Matcher::R => write!(buf, "<R,{}>", arg_idx).unwrap(),
+                Matcher::F => write!(buf, "<F,{}>", arg_idx).unwrap(),
+                Matcher::Reg(regid) => write!(buf, "{}", regid).unwrap(),
+                Matcher::Ref => write!(buf, "[<R,{}>]", arg_idx).unwrap(),
+                Matcher::RefOffset => write!(buf, "[<R,{}>, <Imm,{}>]", arg_idx, arg_idx + 1).unwrap(),
+                Matcher::Imm => write!(buf, "<Imm,{}>", arg_idx).unwrap(),
+                Matcher::Offset => write!(buf, "<Off,{}>", arg_idx).unwrap(),
+                Matcher::Ident => write!(buf, "<Ident,{}>", arg_idx).unwrap(),
+                Matcher::C => write!(buf, "<C,{}>", arg_idx).unwrap(),
+                Matcher::T => write!(buf, "<T,{}>", arg_idx).unwrap(),
+                Matcher::V => write!(buf, "<V,{}>", arg_idx).unwrap(),
+                Matcher::X => write!(buf, "<X,{}>", arg_idx).unwrap(),
+            }
 
         arg_idx += match matcher {
             Matcher::RefOffset => 2,
@@ -255,11 +255,11 @@ fn extract_constraints(data: &Opdata) -> Vec<String> {
                         1u32 << (bits - 1), 1u32 << (bits - 1), 1u32 << scale),
             Command::Offset(_) => format!("R(0xFFFFFFFF)"),
             Command::Next | Command::Repeat => continue,
-            Command::F(_) => format!("R(0xFFFFFFFF)"),
-            Command::C(_) => format!("R(0xFFFFFFFF)"),
-            Command::T(_) => format!("R(0xFFFFFFFF)"),
-            Command::V(_) => format!("R(0xFFFFFFFF)"),
-            Command::X(_) => format!("R(0xFFFFFFFF)"),
+            Command::F(_) => format!("F(0xFFFFFFFF)"),
+            Command::C(_) => format!("C(0xFFFFFFFF)"),
+            Command::T(_) => format!("T(0xFFFFFFFF)"),
+            Command::V(_) => format!("V(0xFFFFFFFF)"),
+            Command::X(_) => format!("X(0xFFFFFFFF)"),
             Command::Ufields(items) => format!("R(0xFFFFFFFF)"),
             Command::Sfields(items) => format!("R(0xFFFFFFFF)"),
         };

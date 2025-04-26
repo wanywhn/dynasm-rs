@@ -8,6 +8,7 @@ fn main() {
         "x64" => dynasm::dynasm_opmap!(x64),
         "aarch64" => dynasm::dynasm_opmap!(aarch64),
         "riscv" => dynasm::dynasm_opmap!(riscv),
+        "loongarch" => dynasm::dynasm_opmap!(loongarch),
         x => panic!("Unknown opmap format '{}'", x)
     };
 

@@ -8,6 +8,7 @@ fn main() {
         "x64" => dynasm::dynasm_extract!(x64),
         "aarch64" => dynasm::dynasm_extract!(aarch64),
         "riscv" => dynasm::dynasm_extract!(riscv),
+        "loongarch" => dynasm::dynasm_extract!(loongarch),
         x => panic!("Unknown opmap format '{}'", x)
     };
 
