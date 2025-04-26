@@ -237,11 +237,9 @@ pub fn mnemonics() -> hash_map::Keys<'static, &'static str, &'static [Opdata]> {
     OPMAP.keys()
 }
 
-mod generated_data;
-use generated_data::INSTRUCTIONS;
-
 lazy_static! {
     static ref OPMAP: HashMap<&'static str, &'static [Opdata]> = {
-        INSTRUCTIONS.iter().cloned().collect()
+        static MAP: &[(&str, &[Opdata])] = &include!("opmap.rs");
+        MAP.iter().cloned().collect()
     };
 }
