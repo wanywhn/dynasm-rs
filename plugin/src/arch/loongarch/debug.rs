@@ -113,12 +113,12 @@ fn format_constraints(data: &Opdata) -> String {
             Command::R(_) => (),
             Command::Rno0(_) => constraints.push("rd cannot be r0".to_string()),
             Command::UImm(start, end) => {
-                let s = format!("0 <= imm <= {}", (1u32 << (end - start)) - 1);
-                constraints.push(s);
+                // let s = format!("0 <= imm <= {}", (1u32 << (end.wrapping_sub(*start) as u8)) - 1);
+                // constraints.push(s);
             },
             Command::SImm(start, end) => {
-                let s = format!("{} <= imm <= {}", - 1i32 << (end - start) /2  - 1, 1i32 << (end - start) /2);
-                constraints.push(s);
+                // let s = format!("{} <= imm <= {}", - 1i32 << (end.wrapping_sub(*start) as u8) /2  - 1, 1i32 << (end.wrapping_sub(*start)as u8) /2);
+                // constraints.push(s);
             },
             Command::Ufields(array) => {
                 let sum = sum_adjacent_diffs(array);
@@ -137,11 +137,11 @@ fn format_constraints(data: &Opdata) -> String {
                 _ => (),
             },
             Command::Next | Command::Repeat => (),
-            Command::F(_) => todo!(),
-            Command::C(_) => todo!(),
-            Command::T(_) => todo!(),
-            Command::V(_) => todo!(),
-            Command::X(_) => todo!(),
+            Command::F(_) => (),
+            Command::C(_) => (),
+            Command::T(_) => (),
+            Command::V(_) => (),
+            Command::X(_) => (),
         }
     }
 
