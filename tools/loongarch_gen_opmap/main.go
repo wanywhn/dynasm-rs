@@ -123,30 +123,42 @@ func argToRust(arg *common.Arg) string {
 
 	switch arg.Kind {
 	case common.ArgKindIntReg:
-		return "D"
+		return "R"
 	case common.ArgKindFPReg:
 		return "F"
 	case common.ArgKindFCCReg:
 		return "C"
+	case common.ArgKindScratchReg:
+		return "T"
+	case common.ArgKindVReg:
+		return "V"
+	case common.ArgKindXReg:
+		return "X"
+	case common.ArgKindSignedImm:
+		return "Imm"
+	case common.ArgKindUnsignedImm:
+		return "Imm"
 	default:
 		if len(arg.Slots) == 0 {
 			return "Unknown"
 		}
 		if len(arg.Slots) == 1 {
-			// 简单立即数
-			prefix := "S"
-			if arg.Kind == common.ArgKindUnsignedImm {
-				prefix = "U"
-			}
-			return fmt.Sprintf("%sk%d", prefix, arg.Slots[0].Width)
-		} else {
-			// 复合立即数
-			var parts []string
-			for _, slot := range arg.Slots {
-				parts = append(parts, fmt.Sprintf("k%d", slot.Width))
-			}
-			return fmt.Sprintf("S%s", strings.Join(parts, ""))
+			return "Imm"
+			// 	// 简单立即数
+			// 	prefix := "S"
+			// 	if arg.Kind == common.ArgKindUnsignedImm {
+			// 		prefix = "U"
+			// 	}
+			// 	return fmt.Sprintf("%sk%d", prefix, arg.Slots[0].Width)
+			// } else {
+			// 	// 复合立即数
+			// 	var parts []string
+			// 	for _, slot := range arg.Slots {
+			// 		parts = append(parts, fmt.Sprintf("k%d", slot.Width))
+			// 	}
+			// 	return fmt.Sprintf("S%s", strings.Join(parts, ""))
 		}
+		return "Unknown"
 	}
 }
 
@@ -160,11 +172,21 @@ func argToProcessor(arg *common.Arg) string {
 	}
 
 	switch arg.Kind {
-	case common.ArgKindIntReg, common.ArgKindFPReg, common.ArgKindFCCReg:
+	case common.ArgKindIntReg:
 		return fmt.Sprintf("R(%d)", arg.Slots[0].Offset)
+	case common.ArgKindFPReg:
+		return fmt.Sprintf("F(%d)", arg.Slots[0].Offset)
+	case common.ArgKindVReg:
+		return fmt.Sprintf("V(%d)", arg.Slots[0].Offset)
+	case common.ArgKindXReg:
+		return fmt.Sprintf("X(%d)", arg.Slots[0].Offset)
+	case common.ArgKindFCCReg:
+		return fmt.Sprintf("C(%d)", arg.Slots[0].Offset)
+	case common.ArgKindScratchReg:
+		return fmt.Sprintf("T(%d)", arg.Slots[0].Offset)
 	case common.ArgKindSignedImm:
 		if len(arg.Slots) == 1 {
-			return fmt.Sprintf("Sbits(%d, %d)", arg.Slots[0].Offset, arg.Slots[0].Width)
+			return fmt.Sprintf("SImm(%d, %d)", arg.Slots[0].Offset, arg.Slots[0].Width)
 		} else {
 			var parts []string
 			for _, slot := range arg.Slots {
@@ -174,7 +196,7 @@ func argToProcessor(arg *common.Arg) string {
 		}
 	case common.ArgKindUnsignedImm:
 		if len(arg.Slots) == 1 {
-			return fmt.Sprintf("Ubits(%d, %d)", arg.Slots[0].Offset, arg.Slots[0].Width)
+			return fmt.Sprintf("UImm(%d, %d)", arg.Slots[0].Offset, arg.Slots[0].Width)
 		} else {
 			var parts []string
 			for _, slot := range arg.Slots {
