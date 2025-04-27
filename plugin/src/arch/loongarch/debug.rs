@@ -250,9 +250,9 @@ fn extract_constraints(data: &Opdata) -> Vec<String> {
         let constraint = match command {
             Command::R(_) => format!("R(0xFFFFFFFF)"),
             Command::Rno0(_) => format!("R(0xFFFFFFFE)"),
-            Command::UImm(bits, scale) => format!("Range(0, {}, {})", 1u32 << bits, 1u32 << scale),
-            Command::SImm(bits, scale) => format!("Range(-{}, {}, {})", 
-                        1u32 << (bits - 1), 1u32 << (bits - 1), 1u32 << scale),
+            Command::UImm(start, len) => format!("Range(0, {}, {})", 1u32 << len, 1),
+            Command::SImm(start, len) => format!("Range(-{}, {}, {})", 
+                        1u32 << (len - 1), (1u32 << (len - 1)) - 1, 1u32),
             Command::Offset(_) => format!("R(0xFFFFFFFF)"),
             Command::Next | Command::Repeat => continue,
             Command::F(_) => format!("F(0xFFFFFFFF)"),
@@ -260,8 +260,19 @@ fn extract_constraints(data: &Opdata) -> Vec<String> {
             Command::T(_) => format!("T(0xFFFFFFFF)"),
             Command::V(_) => format!("V(0xFFFFFFFF)"),
             Command::X(_) => format!("X(0xFFFFFFFF)"),
-            Command::Ufields(items) => format!("R(0xFFFFFFFF)"),
-            Command::Sfields(items) => format!("R(0xFFFFFFFF)"),
+            Command::Ufields(items) => {
+                format!("Range(0, {}, {})", 1u32 << items.iter()
+                .enumerate()
+                .filter(|(i, _)| i % 2 != 0)
+                .map(|(_, &x)| x as u32).sum::<u32>(), 1)
+            },
+            Command::Sfields(items) => {
+                let l = items.iter()
+                .enumerate()
+                .filter(|(i, _)| i % 2 != 0)
+                .map(|(_, &x)| x as u32).sum::<u32>() - 1;
+                format!("Range(-{}, {}, {})", 1u32 << l, 1u32 << l -1 , 1)
+            },
         };
         constraints.push(format!("{}: {}", arg_idx, constraint));
         arg_idx += 1;

@@ -124,9 +124,9 @@ pub enum Command {
     /// A LASX register
     X(u8),
     // Immediate handling
-    /// Unsigned immediate: start, end
+    /// Unsigned immediate: start, len
     UImm(u8, u8),
-    /// Signed immediate: start, end
+    /// Signed immediate: start, len
     SImm(u8, u8),
     /// Unsigned immediate: [start, end]+
     Ufields(&'static [u8]),
