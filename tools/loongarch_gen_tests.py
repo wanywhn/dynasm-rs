@@ -8,7 +8,8 @@ from pathlib import Path
 
 # LoongArch instruction blacklist
 LOONGARCH_BLACKLIST = {
-    # Add any problematic instructions here
+    # 已知不支持的指令
+    'xxx.unknown',
 }
 
 def main():
@@ -35,9 +36,13 @@ def main():
 
         # Skip blacklisted instructions
         mnemonic = mnemonic_args.split(' ', 1)[0].strip('"')
-        if mnemonic in LOONGARCH_BLACKLIST:
-            print(f"Skipping {mnemonic} (blacklisted)")
+        if any(blacklisted in mnemonic for blacklisted in LOONGARCH_BLACKLIST):
+            print(f"Skipping {mnemonic} (matches blacklist pattern)")
             continue
+            
+        # Debug output
+        # if args.verbose:
+            # print(f"Processing: {mnemonic_args}")
 
         # Generate test case
         test_case = generate_test_case(mnemonic_args, constraints, isa, extensions)
@@ -78,10 +83,19 @@ def convert_args_to_gnu_as(args):
         # Handle register arguments
         if part.startswith("R,"):
             reg_num = part[2:]
-            converted.append(f"r{reg_num}")
+            converted.append(f"$r{reg_num}")
         elif part.startswith("F,"):
             reg_num = part[2:]
-            converted.append(f"f{reg_num}")
+            converted.append(f"$f{reg_num}")
+        elif part.startswith("X,"):
+            reg_num = part[2:]
+            converted.append(f"$x{reg_num}")
+        elif part.startswith("V,"):
+            reg_num = part[2:]
+            converted.append(f"$vr{reg_num}")
+        elif part.startswith("XV,"):
+            reg_num = part[3:]
+            converted.append(f"$xvr{reg_num}")
         # Handle immediate arguments    
         elif part.startswith("Imm,"):
             imm_num = part[4:]
