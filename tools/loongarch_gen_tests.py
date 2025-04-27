@@ -23,16 +23,22 @@ def main():
 
     # Read input file
     with args.input_file.open("r", encoding="utf-8") as f:
-        lines = [line.strip() for line in f if line.strip()]
+        templates = read_opdata_file(f)
 
-    test_cases = []
-    for line in lines:
-        parts = line.split('\t')
-        if len(parts) < 4:
-            continue
+    # Generate test cases
+    buf = []
+    for template in templates:
+        for _ in range(args.attempts):
+            buf.append(template.create_entry())
 
-        mnemonic_args = parts[0]
-        constraints = eval(parts[1], {
+    # Write output file
+    with args.output_file.open("w", encoding="utf-8") as f:
+        for dynasm, gas in buf:
+            f.write(f"{dynasm}\t{gas}\n")
+
+def read_opdata_file(f):
+    templates = []
+    context = {
         'Range': Range,
         'R': R,
         'F': F,
@@ -42,7 +48,19 @@ def main():
         'T': T,
         'List': List,
         'Special': Special
-    })
+    }
+
+    for line in f:
+        line = line.strip()
+        if not line:
+            continue
+
+        parts = line.split('\t')
+        if len(parts) < 4:
+            continue
+
+        mnemonic_args = parts[0]
+        constraints = eval(parts[1], context)
         isa = parts[2]
         extensions = parts[3] if len(parts) > 3 else ""
 
@@ -51,49 +69,65 @@ def main():
         if any(blacklisted in mnemonic for blacklisted in LOONGARCH_BLACKLIST):
             print(f"Skipping {mnemonic} (matches blacklist pattern)")
             continue
+
+        templates.append(OpTemplate(mnemonic_args, constraints))
+
+    return templates
+
+class OpTemplate:
+    def __init__(self, template, constraints):
+        self.template = template
+        self.constraints = constraints
+        self.args = parse_template(template)
+
+    def create_entry(self):
+        history = History()
+        for (arg, i) in self.args:
+            constraint = self.constraints[i]
+            value = constraint.create_value(history)
+            gas = arg.emit_gas(value)
+            emitted = arg.emit_dynasm(value)
             
-        # Debug output
-        # if args.verbose:
-            # print(f"Processing: {mnemonic_args}")
+            history.values.append(value)
+            history.emitted.append(emitted)
+            history.gas.append(gas)
 
-        # Generate multiple test cases per instruction
-        for _ in range(args.attempts):
-            test_case = generate_test_case(mnemonic_args, constraints, isa, extensions)
-            test_cases.append(test_case)
+        dynasm_string = SUBSTITUTION_RE.sub(
+            lambda m: history.emitted[int(m.group(2))], 
+            self.template.strip('"'))
+            
+        gas_string = SUBSTITUTION_RE.sub(
+            lambda m: history.gas[int(m.group(2))], 
+            self.template.strip('"'))
+            
+        gas_string = convert_args_to_gnu_as(gas_string)
 
-    # Write output file
-    with args.output_file.open("w", encoding="utf-8") as f:
-        for case in test_cases:
-            f.write(f"{case}\n")
+        return dynasm_string, gas_string
 
-def generate_test_case(mnemonic_args, constraints, isa, extensions):
-    # Split mnemonic and arguments
-    parts = mnemonic_args.strip('"').split(' ', 1)
-    mnemonic = parts[0]
-    args = parts[1] if len(parts) > 1 else ""
+class History:
+    def __init__(self):
+        self.values = []
+        self.emitted = []
+        self.gas = []
 
-    # Parse arguments and apply constraints
-    parsed_args = []
-    arg_parts = args.split(', ') if args else []
-    for i, part in enumerate(arg_parts):
-        if part.startswith(('R,', 'F,', 'X,', 'V,', 'XV,')):
-            reg_type = part[0]
-            reg_num = constraints[i].create_value() if i < len(constraints) else random.randint(0, 31)
-            parsed_args.append(f"{reg_type},{reg_num}")
-        elif part.startswith('Imm,'):
-            imm_val = constraints[i].create_value() if i < len(constraints) else random.randint(0, 255)
-            parsed_args.append(f"Imm,{imm_val}")
-        elif part.startswith('Off,'):
-            off_val = constraints[i].create_value() if i < len(constraints) else random.randint(0, 1024)
-            parsed_args.append(f"Off,{off_val}")
+SUBSTITUTION_RE = re.compile(r"<([A-Za-z]+),([0-9]+)>")
+def parse_template(template):
+    matches = []
+    for argty, argidx in SUBSTITUTION_RE.findall(template):
+        if argty == "Imm":
+            arg = Immediate()
+        elif argty == "Off":
+            arg = Offset()
+        elif argty in "RFVX":
+            arg = Register(argty)
+        elif argty == "C":
+            arg = Condition()
+        elif argty == "T":
+            arg = Template()
         else:
-            parsed_args.append(part)
-
-    # Generate formats
-    dynasm_format = f"{mnemonic} {', '.join(parsed_args)}"
-    gnu_as_format = f"{mnemonic} {convert_args_to_gnu_as(', '.join(parsed_args))}"
-
-    return f"{dynasm_format}\t{gnu_as_format}"
+            raise NotImplementedError(argty)
+        matches.append((arg, int(argidx)))
+    return matches
 
 # Constraint base class
 class Constraint:
@@ -149,15 +183,6 @@ class C(Constraint):
     def create_value(self, history=None):
         return self.cond
 
-class T(Constraint):
-    """Template register constraint"""
-    def __init__(self, mask):
-        self.mask = mask
-        self.valid_regs = [i for i in range(32) if (mask & (1 << i))]
-        
-    def create_value(self, history=None):
-        return random.choice(self.valid_regs)
-
 class X(Constraint):
     """Extended register constraint"""
     def __init__(self, mask):
@@ -182,7 +207,6 @@ class T(Constraint):
         self.type = type
         
     def create_value(self, history=None):
-        # Return the template type as-is
         return self.type
 
 class Special(Constraint):
@@ -243,6 +267,54 @@ def convert_args_to_gnu_as(args):
             converted.append(part)
     
     return ', '.join(converted)
+
+# Argument classes for LoongArch
+class Register:
+    def __init__(self, family):
+        self.family = family
+        
+    def emit_gas(self, value):
+        if self.family == "R":
+            return f"$r{value}"
+        elif self.family == "F":
+            return f"$f{value}"
+        elif self.family == "X":
+            return f"$x{value}"
+        elif self.family == "V":
+            return f"$vr{value}"
+        else:
+            raise NotImplementedError(self.family)
+            
+    def emit_dynasm(self, value):
+        return f"{self.family},{value}"
+
+class Immediate:
+    def emit_gas(self, value):
+        return str(value)
+        
+    def emit_dynasm(self, value):
+        return f"Imm,{value}"
+
+class Offset(Immediate):
+    def emit_gas(self, value):
+        return str(value)
+        
+    def emit_dynasm(self, value):
+        return f"Off,{value}"
+
+class Condition:
+    def emit_gas(self, value):
+        return str(value)
+        
+    def emit_dynasm(self, value):
+        return f"C,{value}"
+
+class Template:
+    def emit_gas(self, value):
+        return str(value)
+        
+    def emit_dynasm(self, value):
+        return f"T,{value}"
 
 if __name__ == '__main__':
     main()
