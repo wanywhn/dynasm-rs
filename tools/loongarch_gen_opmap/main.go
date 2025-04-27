@@ -65,16 +65,22 @@ func generateOpmapFile(path string, insns []*common.InsnDescription) error {
 	// 生成每条指令的条目
 	for _, mnemonic := range mnemonics {
 		group := insnMap[mnemonic]
-		file.WriteString(fmt.Sprintf("\"%s\" = [\n", mnemonic))
-
+		shouldSkip := false
 		// 检查是否需要显示原始名称
 		showOrigName := false
 		for _, insn := range group {
+			if _, ok := insn.Attribs["lbt"]; ok {
+				shouldSkip = true
+			}
 			if origName, ok := insn.Attribs["orig_name"]; ok && origName != mnemonic {
 				showOrigName = true
-				break
+				mnemonic = origName
 			}
 		}
+		if shouldSkip {
+			continue // 忽略LBT指令，它们在opmap中不显示
+		}
+		file.WriteString(fmt.Sprintf("\"%s\" = [\n", mnemonic))
 
 		// 生成每个编码变体
 		for _, insn := range group {

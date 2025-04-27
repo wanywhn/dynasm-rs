@@ -99,7 +99,7 @@ def convert_args_to_gnu_as(args):
         # Handle immediate arguments    
         elif part.startswith("Imm,"):
             imm_num = part[4:]
-            converted.append(f"#{imm_num}")
+            converted.append(f"{imm_num}")
         # Handle offset arguments
         elif part.startswith("Off,"):
             off_num = part[4:]
