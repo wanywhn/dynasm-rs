@@ -90,57 +90,37 @@ pub(super) fn compile_instruction(ctx: &mut Context, data: MatchData) -> Result<
             },
 
             FlatArg::Immediate { ref value } => match *command {
-                Command::UImm(bits, scaling) => {
+                Command::UImm(offset, bitlen) => {
                     let span = value.span();
-                    let range: u32 = bitmask(bits);
+                    let mask = bitmask(bitlen);
 
-                    let mut imm_encoder = ImmediateEncoder::new(value);
-                    imm_encoder.gather_fields(data.data.commands, i + 1, &mut statics);
+                    if let Some((biased, _)) = static_range_check(value, 0, mask, 0, span)? {
+                        statics.push((offset, biased));
 
-                    match imm_encoder.static_value {
-                        Some(static_value) => {
-                            static_range_check(static_value, 0, range, scaling, span)?;
-                        },
-                        None => {
-                            let check = if scaling == 0 {
-                                quote_spanned!{ span =>
-                                    _dyn_imm > #range
-                                }
-                            } else {
-                                let zeromask: u32 = bitmask(scaling);
-                                quote_spanned!{ span =>
-                                    _dyn_imm > #range || _dyn_imm & #zeromask != 0u32
-                                }
-                            };
-                            imm_encoder.emit_dynamic(false, false, check, &mut dynamics);
-                        }
+                    } else {
+                        let check = dynamic_range_check_unsigned(value.span(), 0, mask, 0);
+
+                        dynamics.push((offset, quote_spanned!{ value.span()=>
+                            { let _dyn_imm: u32 = #value; #check; _dyn_imm & #mask }
+                        }));
                     }
                 },
-                Command::SImm(bits, scaling) => {
+                // signed immediate encoding
+
+                Command::SImm(offset, bitlen) => {
+                    let mask = bitmask(bitlen);
+                    let half = -1i32 << (bitlen - 1);
                     let span = value.span();
-                    let range = bitmask(bits);
-                    let min: i32 = (-1) << (bits - 1);
 
-                    let mut imm_encoder = ImmediateEncoder::new(value);
-                    imm_encoder.gather_fields(data.data.commands, i + 1, &mut statics);
+                    if let Some((_, scaled)) = static_range_check(value, half, mask, 0, span)? {
+                        statics.push((offset, scaled & mask));
 
-                    match imm_encoder.static_value {
-                        Some(static_value) => {
-                            static_range_check(static_value, min, range, scaling, span)?;
-                        },
-                        None => {
-                            let check = if scaling == 0 {
-                                quote_spanned!{ span =>
-                                    _dyn_imm.wrapping_sub(#min) as u32 > #range
-                                }
-                            } else {
-                                let zeromask = bitmask(scaling) as i32;
-                                quote_spanned!{ span =>
-                                    _dyn_imm.wrapping_sub(#min) as u32 > #range || _dyn_imm & #zeromask != 0i32
-                                }
-                            };
-                            imm_encoder.emit_dynamic(true, false, check, &mut dynamics);
-                        }
+                    } else {
+                        let check = dynamic_range_check_signed(value.span(), half, mask, 0);
+
+                        dynamics.push((offset, quote_spanned!{ value.span()=>
+                            { let _dyn_imm: i32 = #value; #check; (_dyn_imm as u32) & #mask }
+                        }));
                     }
                 },
                 Command::Offset(relocation_type) => {
@@ -190,7 +170,7 @@ pub(super) fn compile_instruction(ctx: &mut Context, data: MatchData) -> Result<
 
                     match imm_encoder.static_value {
                         Some(static_value) => {
-                            static_range_check(static_value, min, range, scaling, span)?;
+                            static_range_check(value, min, range, scaling, span)?;
                         },
                         None => {
                             let check = if scaling == 0 {
@@ -223,8 +203,8 @@ pub(super) fn compile_instruction(ctx: &mut Context, data: MatchData) -> Result<
 
         // figure out how far the cursor has to be advanced.
         match *command {
-            Command::UImm(_, _)
-            | Command::SImm(_, _) => (),
+            Command::Ufields(_)
+            | Command::Sfields(_) => (),
             _ => cursor += 1
         }
     }
@@ -295,18 +275,6 @@ impl<'a> ImmediateEncoder<'a> {
     pub fn gather_fields(&mut self, commands: &[Command], index: usize, statics: &mut Vec<(u8, u32)>) {
         loop {
             match commands.get(index) {
-                // Some(&Command::BitRange(offset, bits, scaling)) => {
-                //     let mask = bitmask(bits);
-
-                //     if let Some(v) = self.static_value {
-                //         let slice = (v >> scaling) as u32 & mask;
-                //         statics.push((offset, slice));
-                //     } else {
-                //         self.encodes.push((offset, quote_spanned!{ self.span=>
-                //             ((_dyn_imm >> #scaling) as u32 & #mask)
-                //         }));
-                //     }
-                // },
                 Some(Command::Next) => break,
                 Some(_)
                 | None => panic!("Bad encoding data, integer field sequence is not terminated"),
@@ -405,25 +373,81 @@ impl<'a> ImmediateEncoder<'a> {
 /// (value - min) <= range
 /// ((value - min) & bitmask(scale)) == 0
 /// returning (value - min) on success.
-fn static_range_check(value: i64, min: i32, range: u32, scale: u8, span: Span) -> Result<u32, Option<String>> {
-    if value < i64::from(min) {
-        emit_error!(span, "Immediate too low");
+fn static_range_check(expr: &syn::Expr, min: i32, range: u32, scale: u8, span: Span) -> Result<Option<(u32, u32)>, Option<String>> {
+    #![allow(unexpected_cfgs)]
+
+    // signed 64-bit parse is always safe for 32-bit numbers
+    let value = match as_signed_number(expr) {
+        Some(v) => v,
+        None => return Ok(None)
+    };
+
+    // this allows turning off static checks for testing purposes
+    #[cfg(disable_static_checks="1")]
+    return Ok(None);
+
+
+    // arithmetic right shift
+    let scaled: i64 = value >> scale;
+    if scaled << scale != value {
+        emit_error!(expr, "Unrepresentable immediate");
         return Err(None);
     }
 
-    let biased = value - i64::from(min);
+    let biased = scaled - i64::from(min);
+    if biased < 0 {
+        emit_error!(expr, "Immediate too low");
+        Err(None)
+    } else if biased > i64::from(range) {
+        emit_error!(expr, "Immediate too high");
+        Err(None)
+    } else {
+        // this cast is always safe
+        Ok(Some((biased as u32, scaled as u32)))
 
-    if biased > i64::from(range) {
-        emit_error!(span, "Immediate too high");
-        return Err(None);
     }
+}
 
-    let biased = biased as u32;
+/// emits the code for a range check on an unsigned immediate.
+fn dynamic_range_check_unsigned(span: Span, bias: u32, range: u32, scale: u8) -> TokenStream {
+    let check = if scale == 0 {
+        if bias == 0 {
+            quote_spanned!{ span=> _dyn_imm > #range }
+        } else {
+            quote_spanned!{ span=> _dyn_imm.wrapping_sub(#bias) > #range }
+        }
+    } else {
+        let mask = bitmask(scale);
 
-    if scale != 0 && (biased & bitmask(scale)) != 0 {
-        emit_error!(span, "Unrepresentable immediate");
-        return Err(None);
-    }
+        if bias == 0 {
+            quote_spanned!{ span=> ((_dyn_imm & #mask) != 0) || (_dyn_imm >> #scale) > #range }
+        } else {
+            quote_spanned!{ span=> ((_dyn_imm & #mask) != 0) || (_dyn_imm >> #scale).wrapping_sub(#bias) > #range }
+        }
+    };
 
-    Ok(biased)
+    quote_spanned!{ span => if #check { ::dynasmrt::aarch64::immediate_out_of_range_unsigned_32(_dyn_imm); }}
+}
+
+/// emits the code for a range check on a signed immediate.
+fn dynamic_range_check_signed(span: Span, bias: i32, range: u32, scale: u8) -> TokenStream {
+    let bias = -bias;
+
+    let check = if scale == 0 {
+        if bias == 0 {
+            quote_spanned!{ span => (_dyn_imm as u32) > #range }
+        } else {
+            quote_spanned!{ span => (_dyn_imm.wrapping_add(#bias) as u32) > #range }
+        }
+    } else {
+        let mask = bitmask(scale) as i32;
+
+        if bias == 0 {
+            quote_spanned!{ span=> ((_dyn_imm & #mask) != 0) || ((_dyn_imm >> #scale) as u32) > #range }
+        } else {
+            quote_spanned!{ span=> ((_dyn_imm & #mask) != 0) || ((_dyn_imm >> #scale).wrapping_add(#bias) as u32) > #range }
+        }
+    };
+
+    quote_spanned!{ span => if #check { ::dynasmrt::aarch64::immediate_out_of_range_signed_32(_dyn_imm); }}
 }
