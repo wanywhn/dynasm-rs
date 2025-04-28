@@ -9,6 +9,14 @@ Aarch64
 - `aarch64_emit_tests.py`: Takes the output of the previous step and uses it to generate the testcases in `testing/tests/gen_aarch64` that can then be used to validate dynasm.
 
 
+LoongArch
+#########
+
+### Test suite generation
+
+- First generate an opcode data dump using `cargo run --bin=export -- loongarch > loongarch_opmap_export.txt` from `../doc/insref`
+- Use `python3 loongarch_emit_tests.py loongarch_compiled_tests.txt ../testing/tests/gen_loongarch/` to generate the test suite
+
 RISC-V
 ######
 

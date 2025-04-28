@@ -286,35 +286,35 @@ class Register:
             raise NotImplementedError(self.family)
             
     def emit_dynasm(self, value):
-        return f"{self.family},{value}"
+        return f"{self.family}{value}"
 
 class Immediate:
     def emit_gas(self, value):
         return str(value)
         
     def emit_dynasm(self, value):
-        return f"Imm,{value}"
+        return f"{value}"
 
 class Offset(Immediate):
     def emit_gas(self, value):
         return str(value)
         
     def emit_dynasm(self, value):
-        return f"Off,{value}"
+        return f"{value}"
 
 class Condition:
     def emit_gas(self, value):
         return str(value)
         
     def emit_dynasm(self, value):
-        return f"C,{value}"
+        return f"C{value}"
 
 class Template:
     def emit_gas(self, value):
         return str(value)
         
     def emit_dynasm(self, value):
-        return f"T,{value}"
+        return f"T{value}"
 
 if __name__ == '__main__':
     main()
