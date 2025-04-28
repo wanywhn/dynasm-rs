@@ -85,6 +85,8 @@ pub(super) fn compile_instruction(ctx: &mut Context, data: MatchData) -> Result<
                 // Default is only emitted for a RefOffset where no offset was provided, i.e. it is 0
                 Command::UImm(_, _)
                 | Command::SImm(_, _)
+                | Command::Ufields(_)
+                | Command::Sfields(_)
                 | Command::Next => (),
                 _ => panic!("Invalid argument processor")
             },
@@ -103,6 +105,40 @@ pub(super) fn compile_instruction(ctx: &mut Context, data: MatchData) -> Result<
                         dynamics.push((offset, quote_spanned!{ value.span()=>
                             { let _dyn_imm: u32 = #value; #check; _dyn_imm & #mask }
                         }));
+                    }
+                },
+                Command::Sfields(arr) => {
+                    let bitlen = arr.iter().enumerate()
+                    .filter(|(i, _)| i % 2 != 0)
+                    .map(|(_, &val)| val)
+                    .sum();
+
+                    let mask = bitmask(bitlen);
+                    let half = -1i32 << (bitlen - 1);
+                    let span = value.span();
+
+                    if let Some((biased, _)) = static_range_check(value, half, mask, 0, span)? {
+
+                        for w in arr.windows(2).step_by(2) {
+                            let offset = w[0];
+                            let len = w[1];
+                            statics.push((offset, (biased >> (bitlen - len) & bitmask(len))));
+                            // dynamics.push((offset + 1, quote_spanned!{ span=>
+                            //     (value >> #len) as u32
+                            // }));
+                        }
+
+                    } else {
+                        let check = dynamic_range_check_signed(value.span(), half, mask, 0);
+
+                        for w in arr.windows(2).step_by(2) {
+                            let offset = w[0];
+                            let len = w[1];
+                            let par_ask = bitmask(len);
+                            dynamics.push((offset, quote_spanned!{ value.span()=>
+                                {let _dyn_imm: i32 = #value; #check; ((value >> (#bitlen - #len)) as u32) & #par_ask }
+                            }));
+                        }
                     }
                 },
                 // signed immediate encoding
@@ -203,8 +239,6 @@ pub(super) fn compile_instruction(ctx: &mut Context, data: MatchData) -> Result<
 
         // figure out how far the cursor has to be advanced.
         match *command {
-            Command::Ufields(_)
-            | Command::Sfields(_) => (),
             _ => cursor += 1
         }
     }
