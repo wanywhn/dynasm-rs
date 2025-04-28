@@ -76,10 +76,10 @@ fn sanitize_args(args: &mut [RawArg], target: &LoongArchTarget) -> Result<(), Op
 
 /// Sanitize a single register, checking for invalid uses
 fn sanitize_register(register: &Register, span: Span) -> Result<(), Option<String>> {
-    if let Some(RegId::R0) = register.as_id() {
-        emit_error!(span, "$zero (r0) cannot be used as a destination register");
-        return Err(None);
-    }
+    // if let Some(RegId::R0) = register.as_id() {
+        // emit_error!(span, "$zero (r0) cannot be used as a destination register");
+        // return Err(None);
+    // }
     Ok(())
 }
 
