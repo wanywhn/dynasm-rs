@@ -30,9 +30,11 @@ pub mod x64;
 pub mod x86;
 pub mod aarch64;
 pub mod riscv;
+pub mod loongarch;
 
 pub use crate::mmap::ExecutableBuffer;
 pub use dynasm::{dynasm, dynasm_backwards};
+pub use crate::loongarch::{Assembler as LoongArchAssembler, R as LoongArchRegister};
 
 use crate::components::{MemoryManager, LabelRegistry, RelocRegistry, ManagedRelocs, PatchLoc, StaticLabel};
 use crate::relocations::Relocation;

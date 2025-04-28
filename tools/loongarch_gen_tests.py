@@ -100,7 +100,7 @@ class OpTemplate:
             lambda m: history.gas[int(m.group(2))], 
             self.template.strip('"'))
             
-        gas_string = convert_args_to_gnu_as(gas_string)
+        # gas_string = convert_args_to_gnu_as(gas_string)
 
         return dynasm_string, gas_string
 
@@ -230,19 +230,19 @@ def convert_args_to_gnu_as(args):
         # Handle register arguments
         if part.startswith("R,"):
             reg_num = part[2:]
-            converted.append(f"$r{reg_num}")
+            converted.append(f"r{reg_num}")
         elif part.startswith("F,"):
             reg_num = part[2:]
-            converted.append(f"$f{reg_num}")
+            converted.append(f"f{reg_num}")
         elif part.startswith("X,"):
             reg_num = part[2:]
-            converted.append(f"$x{reg_num}")
+            converted.append(f"x{reg_num}")
         elif part.startswith("V,"):
             reg_num = part[2:]
-            converted.append(f"$vr{reg_num}")
+            converted.append(f"vr{reg_num}")
         elif part.startswith("XV,"):
             reg_num = part[3:]
-            converted.append(f"$xvr{reg_num}")
+            converted.append(f"xvr{reg_num}")
         # Handle immediate arguments    
         elif part.startswith("Imm,"):
             imm_num = part[4:]
@@ -286,7 +286,8 @@ class Register:
             raise NotImplementedError(self.family)
             
     def emit_dynasm(self, value):
-        return f"{self.family}{value}"
+        return self.emit_gas(value).replace("$", "");
+        # return f"{self.family}{value}"
 
 class Immediate:
     def emit_gas(self, value):
