@@ -47,10 +47,6 @@ pub fn format_opdata_list(name: &str, data: &[Opdata], target: LoongArchTarget) 
     let mut forms = Vec::new();
 
     for data in data {
-        if (target.is_64_bit() && !data.isa_flags.contains(ISAFlags::LA64)) || 
-           (target.is_32_bit() && !data.isa_flags.contains(ISAFlags::LA32)) {
-            continue
-        }
 
         forms.push(format!("{} {}", format_opdata(name, data), format_features(data)));
     }

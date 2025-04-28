@@ -71,29 +71,6 @@ fn parse_arg(ctx: &mut Context, input: parse::ParseStream) -> parse::Result<ast:
         });
     }
 
-    // Check for offset before memory reference
-    if input.peek(syn::LitInt) || input.peek(syn::Ident) {
-        let offset: syn::Expr = input.parse()?;
-        
-        if input.peek(syn::token::Bracket) {
-            let span = input.cursor().span();
-            let inner;
-            let _ = syn::bracketed!(inner in input);
-            let inner = &inner;
-
-            let base = parse_reg(ctx, inner)?.ok_or_else(|| inner.error("Expected register"))?;
-
-            return Ok(ast::RawArg::Reference {
-                span,
-                base,
-                offset: Some(offset)
-            });
-        }
-
-        // If no bracket follows, treat as immediate
-        return Ok(ast::RawArg::Immediate { value: offset });
-    }
-
     // A register
     if let Some(reg) = parse_reg(ctx, input)? {
         return Ok(ast::RawArg::Register {
@@ -108,11 +85,14 @@ fn parse_arg(ctx: &mut Context, input: parse::ParseStream) -> parse::Result<ast:
 }
 
 /// Parses a single register, if present
+/// This can be a simple register name (like `x5`)
+/// an alias (any simple name that is registered, like `base`)
+/// or a dynamic register (like `X(expr)`)
 fn parse_reg(ctx: &mut Context, input: parse::ParseStream) -> parse::Result<Option<ast::Register>> {
     // Parse optional $ prefix
-    if input.peek(Token![$]) {
-        let _: Token![$] = input.parse()?;
-    }
+    // if input.peek(Token![$]) {
+        // let _: Token![$] = input.parse()?;
+    // }
 
     // We need to consume an ident, but only if it's one of the many we care about
     let name = input.step(|cursor| {

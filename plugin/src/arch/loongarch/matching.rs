@@ -3,7 +3,7 @@ use proc_macro2::Span;
 
 use super::{Context, LoongArchTarget};
 use super::ast::{ParsedInstruction, RawArg, MatchData, FlatArg, Register, RegId, RegFamily};
-use super::loongarchdata::{Opdata, Matcher, ISAFlags, get_mnemonic_data};
+use super::loongarchdata::{Opdata, Matcher, get_mnemonic_data};
 use super::debug::format_opdata_list;
 
 use crate::common::JumpKind;
@@ -16,21 +16,12 @@ pub(super) fn match_instruction(ctx: &mut Context, mut instruction: ParsedInstru
 
     let opdata = get_mnemonic_data(&instruction.name).ok_or_else(|| Some(format!("Unknown instruction mnemonic '{}'", instruction.name)))?;
 
-    let mut rejected_because_features = false;
+    // println!("instructions.args: {:#?}", instruction.args);
 
     // Iterate through the supported instruction formats
     for data in opdata {
-        // Skip data not intended for our target
-        if ctx.target.is_32_bit() && !data.isa_flags.contains(ISAFlags::LA32) {
-            continue;
-        }
-        if ctx.target.is_64_bit() && !data.isa_flags.contains(ISAFlags::LA64) {
-            continue;
-        }
-        if !data.ext_flags.iter().any(|f| ctx.features.contains(*f)) {
-            rejected_because_features = true;
-            continue;
-        }
+
+        // println!("opdata: {:#?}", data);
 
         if let Some(mut match_data) = match_args(&instruction.args, data) {
             flatten_args(instruction.args, &mut match_data);
@@ -38,13 +29,10 @@ pub(super) fn match_instruction(ctx: &mut Context, mut instruction: ParsedInstru
         }
     }
 
-    let mut error = format!("'{}': instruction format mismatch, expected one of the following forms:\n{}", 
+    let error = format!("'{}': instruction format mismatch, expected one of the following forms:\n{}", 
         &instruction.name, 
         format_opdata_list(&instruction.name, opdata, ctx.target)
     );
-    if rejected_because_features {
-        error.push_str("\nNote: some instruction formats were rejected because of inactive ISA extension sets.");
-    }
 
     Err(Some(error))
 }
