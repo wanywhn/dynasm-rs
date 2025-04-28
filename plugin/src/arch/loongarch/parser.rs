@@ -12,17 +12,19 @@ pub(super) fn parse_instruction(ctx: &mut Context, input: parse::ParseStream) ->
 
     // Read the full dot-separated op
     let mut name = parse_ident_or_rust_keyword(input)?.to_string();
-
+    // print!("{:#?}", input);
     while input.peek(Token![.]) {
         let _: Token![.] = input.parse()?;
-        name.push('.');
+        name.push('.'); 
 
         if input.peek(syn::LitInt) {
             let number: syn::LitInt = input.parse()?;
             name.push_str(number.base10_digits());
+            name.push_str(number.suffix());
         } else {
             name.push_str(&parse_ident_or_rust_keyword(input)?.to_string());
         }
+
     }
 
     let mut args = Vec::new();
