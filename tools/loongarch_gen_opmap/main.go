@@ -215,15 +215,19 @@ func argToProcessor(mnemonic string, arg *common.Arg) string {
 			mnemonic == "bceqz" || mnemonic == "bcnez" {
 			return "Offset(BZ)"
 		}
-		if mnemonic == "ll.w" || mnemonic == "sc.w" ||
+
+		if mnemonic == "vstelm.d" {
+			return fmt.Sprintf("Sscaled(%d, %d, %d)", arg.Slots[0].Offset, arg.Slots[0].Width, 3)
+		}
+		if mnemonic == "ll.w" || mnemonic == "sc.w" || mnemonic == "vstelm.w" ||
 			mnemonic == "ll.d" || mnemonic == "sc.d" ||
 			mnemonic == "ldptr.w" || mnemonic == "stptr.w" ||
 			mnemonic == "ldptr.d" || mnemonic == "stptr.d" {
 			return fmt.Sprintf("Sscaled(%d, %d, %d)", arg.Slots[0].Offset, arg.Slots[0].Width, 2)
 		}
 
-		if mnemonic == "vldrepl.h" || mnemonic == "sc.w" ||
-			mnemonic == "ll.d" || mnemonic == "sc.d" ||
+		if mnemonic == "vldrepl.h" ||
+			mnemonic == "vstelm.h" || mnemonic == "sc.d" ||
 			mnemonic == "ldptr.w" || mnemonic == "stptr.w" ||
 			mnemonic == "ldptr.d" || mnemonic == "stptr.d" {
 			return fmt.Sprintf("Sscaled(%d, %d, %d)", arg.Slots[0].Offset, arg.Slots[0].Width, 1)

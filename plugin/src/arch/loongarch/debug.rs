@@ -292,10 +292,10 @@ fn extract_constraints(data: &Opdata) -> Vec<String> {
                         format!("Range(-{}, {}, {})", 1u32 << l, 1u32 << l -1 , 1)
                     },
             Command::Uscaled(_, len, shift) => {
-                format!("Range(0, {}, {})", 1u32 << len, shift)
+                format!("Range(0, {}, {})", 1u32 << len, 1 << shift)
             }
             Command::Sscaled(_, len, shift) => {
-                format!("Range(-{}, {}, {})", 1u32 << (len - 1), (1u32 << (len-1)) - 1, shift)
+                format!("Range(-{}, {}, {})", 1u32 << (len - 1), (1u32 << (len-1)) - 1, 1 << shift)
             },
             Command::Usubone(_, bitlen) => {
                 format!("Range(1, {}, {})", (1u32 << bitlen) + 1, 1)
