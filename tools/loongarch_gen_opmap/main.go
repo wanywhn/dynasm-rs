@@ -101,13 +101,13 @@ func generateOpmapFile(path string, insns []*common.InsnDescription) error {
 			// 生成操作数列表
 			var argList []string
 			for _, arg := range insn.Format.Args {
-				argList = append(argList, argToRust(arg))
+				argList = append(argList, argToRust(mnemonic, arg))
 			}
 
 			// 生成处理器列表
 			var procList []string
 			for _, arg := range insn.Format.Args {
-				procList = append(procList, argToProcessor(arg))
+				procList = append(procList, argToProcessor(mnemonic, arg))
 			}
 
 			file.WriteString(fmt.Sprintf("    %s = [%s] => [%s];\n",
@@ -122,7 +122,7 @@ func generateOpmapFile(path string, insns []*common.InsnDescription) error {
 }
 
 // argToRust 将操作数转换为Rust宏参数
-func argToRust(arg *common.Arg) string {
+func argToRust(mnemonic string, arg *common.Arg) string {
 	if arg == nil {
 		return "Unknown"
 	}
@@ -141,6 +141,14 @@ func argToRust(arg *common.Arg) string {
 	case common.ArgKindXReg:
 		return "X"
 	case common.ArgKindSignedImm:
+		// 特殊处理分支指令
+		if mnemonic == "beq" || mnemonic == "bne" || mnemonic == "blt" ||
+			mnemonic == "bge" || mnemonic == "bltu" || mnemonic == "bgeu" ||
+			mnemonic == "jirl" || mnemonic == "b" || mnemonic == "bl " ||
+			mnemonic == "beqz" || mnemonic == "bnez" || mnemonic == "bceqz" ||
+			mnemonic == "bcnez" {
+			return "Offset"
+		}
 		return "Imm"
 	case common.ArgKindUnsignedImm:
 		return "Imm"
@@ -150,26 +158,13 @@ func argToRust(arg *common.Arg) string {
 		}
 		if len(arg.Slots) == 1 {
 			return "Imm"
-			// 	// 简单立即数
-			// 	prefix := "S"
-			// 	if arg.Kind == common.ArgKindUnsignedImm {
-			// 		prefix = "U"
-			// 	}
-			// 	return fmt.Sprintf("%sk%d", prefix, arg.Slots[0].Width)
-			// } else {
-			// 	// 复合立即数
-			// 	var parts []string
-			// 	for _, slot := range arg.Slots {
-			// 		parts = append(parts, fmt.Sprintf("k%d", slot.Width))
-			// 	}
-			// 	return fmt.Sprintf("S%s", strings.Join(parts, ""))
 		}
 		return "Unknown"
 	}
 }
 
 // argToProcessor 将操作数转换为处理器表达式
-func argToProcessor(arg *common.Arg) string {
+func argToProcessor(mnemonic string, arg *common.Arg) string {
 	if arg == nil {
 		return "Unknown"
 	}
@@ -191,6 +186,18 @@ func argToProcessor(arg *common.Arg) string {
 	case common.ArgKindScratchReg:
 		return fmt.Sprintf("T(%d)", arg.Slots[0].Offset)
 	case common.ArgKindSignedImm:
+		// 特殊处理分支指令
+		if mnemonic == "beq" || mnemonic == "bne" ||
+			mnemonic == "blt" || mnemonic == "bge" ||
+			mnemonic == "bltu" || mnemonic == "bgeu" ||
+			mnemonic == "jirl" {
+			return "Offset(B)"
+		} else if mnemonic == "b" || mnemonic == "bl " {
+			return "Offset(J)"
+		} else if mnemonic == "beqz" || mnemonic == "bnez" ||
+			mnemonic == "bceqz" || mnemonic == "bcnez" {
+			return "Offset(BZ)"
+		}
 		if len(arg.Slots) == 1 {
 			return fmt.Sprintf("SImm(%d, %d)", arg.Slots[0].Offset, arg.Slots[0].Width)
 		} else {

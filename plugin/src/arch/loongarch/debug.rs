@@ -200,6 +200,7 @@ pub fn extract_opdata(name: &str, data: &Opdata) -> String {
     let mut first = true;
     let mut arg_idx = 0;
 
+    let mut constraints = extract_constraints(data).join(", ");
     for matcher in data.matchers {
         if first {
             buf.push(' ');
@@ -230,7 +231,7 @@ pub fn extract_opdata(name: &str, data: &Opdata) -> String {
         };
     }
 
-    write!(buf, "\"\t{{{}}}\t", extract_constraints(data).join(", ")).unwrap();
+    write!(buf, "\"\t{{{}}}\t", constraints).unwrap();
 
     buf.push_str(&extract_arch_flags(data));
 
@@ -249,7 +250,11 @@ fn extract_constraints(data: &Opdata) -> Vec<String> {
             Command::UImm(start, len) => format!("Range(0, {}, {})", 1u32 << len, 1),
             Command::SImm(start, len) => format!("Range(-{}, {}, {})", 
                         1u32 << (len - 1), (1u32 << (len - 1)) - 1, 1u32),
-            Command::Offset(_) => format!("R(0xFFFFFFFF)"),
+            Command::Offset(Relocation::B) => format!("Range(-{}, {}, {})", 1<<15, 1<<15, 4),
+            Command::Offset(Relocation::BZ) => format!("Range(-{}, {}, {})", 1<<20, 1<<20, 4),
+            Command::Offset(Relocation::J) => format!("Range(-{}, {}, {})", 1<<25, 1<<25, 4),
+            Command::Offset(Relocation::LITERAL32) => format!("Range(-{}, {}, {})", 1<<31, 1<<31, 1),
+            Command::Offset(Relocation::LITERAL64) => format!("Range(-{}, {}, {})", 1u64<<63, 1u64<<63, 1),
             Command::Next | Command::Repeat => continue,
             Command::F(_) => format!("F(0xFFFFFFFF)"),
             Command::C(_) => format!("C(0xFFFFFFFF)"),
@@ -269,6 +274,7 @@ fn extract_constraints(data: &Opdata) -> Vec<String> {
                 .map(|(_, &x)| x as u32).sum::<u32>() - 1;
                 format!("Range(-{}, {}, {})", 1u32 << l, 1u32 << l -1 , 1)
             },
+            _ => continue
         };
         constraints.push(format!("{}: {}", arg_idx, constraint));
         arg_idx += 1;
