@@ -109,35 +109,44 @@ fn format_constraints(data: &Opdata) -> String {
             Command::R(_) => (),
             Command::Rno0(_) => constraints.push("rd cannot be r0".to_string()),
             Command::UImm(start, end) => {
-                // let s = format!("0 <= imm <= {}", (1u32 << (end.wrapping_sub(*start) as u8)) - 1);
-                // constraints.push(s);
-            },
+                        // let s = format!("0 <= imm <= {}", (1u32 << (end.wrapping_sub(*start) as u8)) - 1);
+                        // constraints.push(s);
+                    },
             Command::SImm(start, end) => {
-                // let s = format!("{} <= imm <= {}", - 1i32 << (end.wrapping_sub(*start) as u8) /2  - 1, 1i32 << (end.wrapping_sub(*start)as u8) /2);
-                // constraints.push(s);
-            },
+                        // let s = format!("{} <= imm <= {}", - 1i32 << (end.wrapping_sub(*start) as u8) /2  - 1, 1i32 << (end.wrapping_sub(*start)as u8) /2);
+                        // constraints.push(s);
+                    },
             Command::Ufields(array) => {
-                let sum = sum_adjacent_diffs(array);
-                let s = format!("0 <= imm <= {}", sum);
-                constraints.push(s);
-            },
+                        let sum = sum_adjacent_diffs(array);
+                        let s = format!("0 <= imm <= {}", sum);
+                        constraints.push(s);
+                    },
             Command::Sfields(array) => {
-                let sum = sum_adjacent_diffs(array) as i16;
-                let s = format!("{} <= imm <= {}", - sum / 2  - 1, sum / 2);
-                constraints.push(s);
-            },
+                        let sum = sum_adjacent_diffs(array) as i16;
+                        let s = format!("{} <= imm <= {}", - sum / 2  - 1, sum / 2);
+                        constraints.push(s);
+                    },
             Command::Offset(reloc) => match reloc {
-                Relocation::B => constraints.push("16-bit offset, 2-byte aligned".to_string()),
-                Relocation::J => constraints.push("26-bit offset, 2-byte aligned".to_string()),
-                Relocation::PC32 => constraints.push("32-bit PC-relative offset".to_string()),
-                _ => (),
-            },
+                        Relocation::B => constraints.push("16-bit offset, 2-byte aligned".to_string()),
+                        Relocation::J => constraints.push("26-bit offset, 2-byte aligned".to_string()),
+                        Relocation::PC32 => constraints.push("32-bit PC-relative offset".to_string()),
+                        _ => (),
+                    },
             Command::Next | Command::Repeat => (),
             Command::F(_) => (),
             Command::C(_) => (),
             Command::T(_) => (),
             Command::V(_) => (),
             Command::X(_) => (),
+            Command::Uscaled(_, bits, scale) => {
+                let s = format!("value <= {}, value = {} * N", (1u32 << (bits + scale)) - 1, 1u32 << scale);
+                constraints.push(s);
+
+            }
+            Command::Sscaled(_, bits, scale) => {
+                let s = format!("-{} <= value <= {}, value = {} * N", 1u32 << (bits + scale - 1), (1u32 << (bits + scale - 1)) - 1, 1u32 << scale);
+                constraints.push(s);
+            }
         }
     }
 
@@ -249,12 +258,16 @@ fn extract_constraints(data: &Opdata) -> Vec<String> {
             Command::Rno0(_) => format!("R(0xFFFFFFFE)"),
             Command::UImm(start, len) => format!("Range(0, {}, {})", 1u32 << len, 1),
             Command::SImm(start, len) => format!("Range(-{}, {}, {})", 
-                        1u32 << (len - 1), (1u32 << (len - 1)) - 1, 1u32),
+                                1u32 << (len - 1), (1u32 << (len - 1)) - 1, 1u32),
             Command::Offset(Relocation::B) => format!("Range(-{}, {}, {})", 1<<15, 1<<15, 4),
             Command::Offset(Relocation::BZ) => format!("Range(-{}, {}, {})", 1<<20, 1<<20, 4),
             Command::Offset(Relocation::J) => format!("Range(-{}, {}, {})", 1<<25, 1<<25, 4),
+            // TODO: is this need?
             Command::Offset(Relocation::LITERAL32) => format!("Range(-{}, {}, {})", 1<<31, 1<<31, 1),
             Command::Offset(Relocation::LITERAL64) => format!("Range(-{}, {}, {})", 1u64<<63, 1u64<<63, 1),
+            Command::Offset(Relocation::LITERAL8) => format!("Range(-{}, {}, {})", 1<<31, 1<<31, 1),
+            Command::Offset(Relocation::LITERAL16) => format!("Range(-{}, {}, {})", 1u64<<63, 1u64<<63, 1),
+            Command::Offset(Relocation::PC32) => format!("Range(-{}, {}, {})", 1u64<<63, 1u64<<63, 1),
             Command::Next | Command::Repeat => continue,
             Command::F(_) => format!("F(0xFFFFFFFF)"),
             Command::C(_) => format!("C(0xFFFFFFFF)"),
@@ -262,19 +275,24 @@ fn extract_constraints(data: &Opdata) -> Vec<String> {
             Command::V(_) => format!("V(0xFFFFFFFF)"),
             Command::X(_) => format!("X(0xFFFFFFFF)"),
             Command::Ufields(items) => {
-                format!("Range(0, {}, {})", 1u32 << items.iter()
-                .enumerate()
-                .filter(|(i, _)| i % 2 != 0)
-                .map(|(_, &x)| x as u32).sum::<u32>(), 1)
-            },
+                        format!("Range(0, {}, {})", 1u32 << items.iter()
+                        .enumerate()
+                        .filter(|(i, _)| i % 2 != 0)
+                        .map(|(_, &x)| x as u32).sum::<u32>(), 1)
+                    },
             Command::Sfields(items) => {
-                let l = items.iter()
-                .enumerate()
-                .filter(|(i, _)| i % 2 != 0)
-                .map(|(_, &x)| x as u32).sum::<u32>() - 1;
-                format!("Range(-{}, {}, {})", 1u32 << l, 1u32 << l -1 , 1)
+                        let l = items.iter()
+                        .enumerate()
+                        .filter(|(i, _)| i % 2 != 0)
+                        .map(|(_, &x)| x as u32).sum::<u32>() - 1;
+                        format!("Range(-{}, {}, {})", 1u32 << l, 1u32 << l -1 , 1)
+                    },
+            Command::Uscaled(_, len, shift) => {
+                format!("Range(0, {}, {})", 1u32 << len, shift)
+            }
+            Command::Sscaled(_, len, shift) => {
+                format!("Range(-{}, {}, {})", 1u32 << (len - 1), (1u32 << (len-1)) - 1, shift)
             },
-            _ => continue
         };
         constraints.push(format!("{}: {}", arg_idx, constraint));
         arg_idx += 1;

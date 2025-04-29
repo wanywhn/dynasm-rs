@@ -124,6 +124,14 @@ pub enum Command {
     /// A LASX register
     X(u8),
     // Immediate handling
+    /// format: `(pos, len, shift)`
+    /// `immediate >> shift` is in the range `0 .. (1 << len)`. Bottom `shift` bits are zero.
+    /// `immediate >> shift` is encoded directly in a bitfield of length `len` at offset `pos`.
+    Uscaled(u8, u8, u8),
+    /// format: `(pos, len, shift)`
+    /// `(immediate >> shift) + (1 << (len - 1))` is in the range `0 .. (1 << len)`. Bottom `shift` bits are zero.
+    /// `immediate >> shift` is encoded directly in a bitfield of length `len` at offset `pos`.
+    Sscaled(u8, u8, u8),
     /// Unsigned immediate: start, len
     UImm(u8, u8),
     /// Signed immediate: start, len

@@ -107,17 +107,24 @@ func generateOpmapFile(path string, insns []*common.InsnDescription) error {
 			 *	b[lt,ge][u] are renamed to b[gt,le][u] with corresponding operand order swapped.
 			 *	All other two-register instructions have the operand in rd, rj order, except these jump instructions. To preserve semantics the names have to be tweaked accordingly. Also all other instructions with comparison semantics adopt the gt/le distinction, such as the boundary checks, so lt/ge is not consistent either.
 			 */
-			if mnemonic == "beq" || mnemonic == "bne" ||
-				mnemonic == "jirl" || mnemonic == "blt" || mnemonic == "bge" ||
-				mnemonic == "bltu" || mnemonic == "bgeu" {
-				var tmp = insn.Format.Args[0]
-				insn.Format.Args[0] = insn.Format.Args[1]
-				insn.Format.Args[1] = tmp
-			}
+			// if mnemonic == "beq" || mnemonic == "bne" ||
+			// 	mnemonic == "jirl" || mnemonic == "blt" || mnemonic == "bge" ||
+			// 	mnemonic == "bltu" || mnemonic == "bgeu" {
+			// 	var tmp = insn.Format.Args[0]
+			// 	insn.Format.Args[0] = insn.Format.Args[1]
+			// 	insn.Format.Args[1] = tmp
+			// }
 			// 生成处理器列表
 			var procList []string
-			for _, arg := range insn.Format.Args {
-				procList = append(procList, argToProcessor(mnemonic, arg))
+
+			if insn.OrigFormat != nil {
+				for _, arg := range insn.OrigFormat.Args {
+					procList = append(procList, argToProcessor(mnemonic, arg))
+				}
+			} else {
+				for _, arg := range insn.Format.Args {
+					procList = append(procList, argToProcessor(mnemonic, arg))
+				}
 			}
 
 			file.WriteString(fmt.Sprintf("    %s = [%s] => [%s];\n",
@@ -207,6 +214,12 @@ func argToProcessor(mnemonic string, arg *common.Arg) string {
 		} else if mnemonic == "beqz" || mnemonic == "bnez" ||
 			mnemonic == "bceqz" || mnemonic == "bcnez" {
 			return "Offset(BZ)"
+		}
+		if mnemonic == "ll.w" || mnemonic == "sc.w" ||
+			mnemonic == "ll.d" || mnemonic == "sc.d" ||
+			mnemonic == "ldptr.w" || mnemonic == "stptr.w" ||
+			mnemonic == "ldptr.d" || mnemonic == "stptr.d" {
+			return fmt.Sprintf("Sscaled(%d, %d, %d)", arg.Slots[0].Offset, arg.Slots[0].Width, 2)
 		}
 		if len(arg.Slots) == 1 {
 			return fmt.Sprintf("SImm(%d, %d)", arg.Slots[0].Offset, arg.Slots[0].Width)

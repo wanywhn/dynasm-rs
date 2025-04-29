@@ -1,3 +1,5 @@
+use std::mem::offset_of;
+
 use super::Context;
 use super::loongarchdata::{Command, Relocation};
 use super::ast::{MatchData, FlatArg, Register};
@@ -93,75 +95,82 @@ pub(super) fn compile_instruction(ctx: &mut Context, data: MatchData) -> Result<
 
             FlatArg::Immediate { ref value } => match *command {
                 Command::UImm(offset, bitlen) => {
-                    let span = value.span();
-                    let mask = bitmask(bitlen);
+                                let span = value.span();
+                                let mask = bitmask(bitlen);
 
-                    if let Some((biased, _)) = static_range_check(value, 0, mask, 0, span)? {
-                        statics.push((offset, biased));
+                                if let Some((biased, _)) = static_range_check(value, 0, mask, 0, span)? {
+                                    statics.push((offset, biased));
 
-                    } else {
-                        let check = dynamic_range_check_unsigned(value.span(), 0, mask, 0);
+                                } else {
+                                    let check = dynamic_range_check_unsigned(value.span(), 0, mask, 0);
 
-                        dynamics.push((offset, quote_spanned!{ value.span()=>
-                            { let _dyn_imm: u32 = #value; #check; _dyn_imm & #mask }
-                        }));
-                    }
-                },
+                                    dynamics.push((offset, quote_spanned!{ value.span()=>
+                                        { let _dyn_imm: u32 = #value; #check; _dyn_imm & #mask }
+                                    }));
+                                }
+                            },
                 Command::Sfields(arr) => {
-                    fun_name(&mut statics, &mut dynamics, value, arr, 0)?;
-                },
-                // signed immediate encoding
-
+                                fun_name(&mut statics, &mut dynamics, value, arr, 0)?;
+                            },
                 Command::SImm(offset, bitlen) => {
-                    let mask = bitmask(bitlen);
-                    let half = -1i32 << (bitlen - 1);
-                    let span = value.span();
+                                let mask = bitmask(bitlen);
+                                let half = -1i32 << (bitlen - 1);
+                                let span = value.span();
 
-                    if let Some((_, scaled)) = static_range_check(value, half, mask, 0, span)? {
-                        statics.push((offset, scaled & mask));
+                                if let Some((_, scaled)) = static_range_check(value, half, mask, 0, span)? {
+                                    statics.push((offset, scaled & mask));
 
-                    } else {
-                        let check = dynamic_range_check_signed(value.span(), half, mask, 0);
+                                } else {
+                                    let check = dynamic_range_check_signed(value.span(), half, mask, 0);
 
-                        dynamics.push((offset, quote_spanned!{ value.span()=>
-                            { let _dyn_imm: i32 = #value; #check; (_dyn_imm as u32) & #mask }
-                        }));
-                    }
-                },
+                                    dynamics.push((offset, quote_spanned!{ value.span()=>
+                                        { let _dyn_imm: i32 = #value; #check; (_dyn_imm as u32) & #mask }
+                                    }));
+                                }
+                            },
                 Command::Offset(relocation_type) => {
-                    let bits;
-                    let scaling;
-                    let commands: &'static [Command];
+                                let bits;
+                                let scaling;
+                                let commands: &'static [Command];
 
-                    // equivalent bitrange encodings for offsets
-                    match relocation_type {
-                        Relocation::B => {
-                                                let arr = &[10, 16];
-                                                fun_name(&mut statics, &mut dynamics, value, arr, 2)?;
-                                            },
-                        Relocation::J => {
-                            let arr = &[0, 10, 10, 16];
-                            fun_name(&mut statics, &mut dynamics, value, arr, 2)?;
-                                            },
-                        Relocation::PC32 => {
-                                                bits = 32;
-                                                scaling = 0;
-                                                commands = &[
-                                                    Command::Next
-                                                ];
-                                            },
-                        Relocation::LITERAL8
-                                            | Relocation::LITERAL16
-                                            | Relocation::LITERAL32
-                                            | Relocation::LITERAL64 => panic!("Literal relocation in instruction"),
-                        Relocation::BZ => {
-                            let arr = &[0, 5, 10, 16];
-                            fun_name(&mut statics, &mut dynamics, value, arr, 2)?;
-                        },
-                    }
+                                // equivalent bitrange encodings for offsets
+                                match relocation_type {
+                                    Relocation::B => {
+                                                            let arr = &[10, 16];
+                                                            fun_name(&mut statics, &mut dynamics, value, arr, 2)?;
+                                                        },
+                                    Relocation::J => {
+                                        let arr = &[0, 10, 10, 16];
+                                        fun_name(&mut statics, &mut dynamics, value, arr, 2)?;
+                                                        },
+                                    Relocation::PC32 => {
+                                                            bits = 32;
+                                                            scaling = 0;
+                                                            commands = &[
+                                                                Command::Next
+                                                            ];
+                                                        },
+                                    Relocation::LITERAL8
+                                                        | Relocation::LITERAL16
+                                                        | Relocation::LITERAL32
+                                                        | Relocation::LITERAL64 => panic!("Literal relocation in instruction"),
+                                    Relocation::BZ => {
+                                        let arr = &[0, 5, 10, 16];
+                                        fun_name(&mut statics, &mut dynamics, value, arr, 2)?;
+                                    },
+                                }
 
+                            },
+                Command::Uscaled(offset, len, scale) |
+                Command::Sscaled(offset, len, scale) => {
+                    let arr = &[offset, len];
+                    fun_name(&mut statics, &mut dynamics, value, arr, scale)?;
                 },
-                _ => panic!("Invalid argument processor")
+
+                Command::Repeat |Command::Next | Command::R(_) |
+                Command::Rno0(_) |Command::F(_) | Command::C(_) |
+                Command::T(_) | Command::V(_) | Command::X(_) |
+                Command::Ufields(_) => panic!("Invalid argument processor"),
             },
 
             FlatArg::JumpTarget { ref jump } => match *command {
