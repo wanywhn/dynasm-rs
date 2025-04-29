@@ -103,7 +103,17 @@ func generateOpmapFile(path string, insns []*common.InsnDescription) error {
 			for _, arg := range insn.Format.Args {
 				argList = append(argList, argToRust(mnemonic, arg))
 			}
-
+			/*
+			 *	b[lt,ge][u] are renamed to b[gt,le][u] with corresponding operand order swapped.
+			 *	All other two-register instructions have the operand in rd, rj order, except these jump instructions. To preserve semantics the names have to be tweaked accordingly. Also all other instructions with comparison semantics adopt the gt/le distinction, such as the boundary checks, so lt/ge is not consistent either.
+			 */
+			if mnemonic == "beq" || mnemonic == "bne" ||
+				mnemonic == "jirl" || mnemonic == "blt" || mnemonic == "bge" ||
+				mnemonic == "bltu" || mnemonic == "bgeu" {
+				var tmp = insn.Format.Args[0]
+				insn.Format.Args[0] = insn.Format.Args[1]
+				insn.Format.Args[1] = tmp
+			}
 			// 生成处理器列表
 			var procList []string
 			for _, arg := range insn.Format.Args {
@@ -144,7 +154,7 @@ func argToRust(mnemonic string, arg *common.Arg) string {
 		// 特殊处理分支指令
 		if mnemonic == "beq" || mnemonic == "bne" || mnemonic == "blt" ||
 			mnemonic == "bge" || mnemonic == "bltu" || mnemonic == "bgeu" ||
-			mnemonic == "jirl" || mnemonic == "b" || mnemonic == "bl " ||
+			mnemonic == "jirl" || mnemonic == "b" || mnemonic == "bl" ||
 			mnemonic == "beqz" || mnemonic == "bnez" || mnemonic == "bceqz" ||
 			mnemonic == "bcnez" {
 			return "Offset"
@@ -192,7 +202,7 @@ func argToProcessor(mnemonic string, arg *common.Arg) string {
 			mnemonic == "bltu" || mnemonic == "bgeu" ||
 			mnemonic == "jirl" {
 			return "Offset(B)"
-		} else if mnemonic == "b" || mnemonic == "bl " {
+		} else if mnemonic == "b" || mnemonic == "bl" {
 			return "Offset(J)"
 		} else if mnemonic == "beqz" || mnemonic == "bnez" ||
 			mnemonic == "bceqz" || mnemonic == "bcnez" {

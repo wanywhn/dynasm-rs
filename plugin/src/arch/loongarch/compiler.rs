@@ -26,7 +26,7 @@ pub(super) fn compile_instruction(ctx: &mut Context, data: MatchData) -> Result<
     // Any relocation will be encoded in this list
     let mut relocations = Vec::new();
 
-    for (i, command) in data.data.commands.iter().enumerate() {
+    for (i, command) in data.data.commands.iter().enumerate(){
         // meta commands
         match *command {
             Command::Repeat => {
@@ -108,38 +108,7 @@ pub(super) fn compile_instruction(ctx: &mut Context, data: MatchData) -> Result<
                     }
                 },
                 Command::Sfields(arr) => {
-                    let bitlen = arr.iter().enumerate()
-                    .filter(|(i, _)| i % 2 != 0)
-                    .map(|(_, &val)| val)
-                    .sum();
-
-                    let mask = bitmask(bitlen);
-                    let half = -1i32 << (bitlen - 1);
-                    let span = value.span();
-
-                    if let Some((biased, _)) = static_range_check(value, half, mask, 0, span)? {
-
-                        for w in arr.windows(2).step_by(2) {
-                            let offset = w[0];
-                            let len = w[1];
-                            statics.push((offset, (biased >> (bitlen - len) & bitmask(len))));
-                            // dynamics.push((offset + 1, quote_spanned!{ span=>
-                            //     (value >> #len) as u32
-                            // }));
-                        }
-
-                    } else {
-                        let check = dynamic_range_check_signed(value.span(), half, mask, 0);
-
-                        for w in arr.windows(2).step_by(2) {
-                            let offset = w[0];
-                            let len = w[1];
-                            let par_ask = bitmask(len);
-                            dynamics.push((offset, quote_spanned!{ value.span()=>
-                                {let _dyn_imm: i32 = #value; #check; ((value >> (#bitlen - #len)) as u32) & #par_ask }
-                            }));
-                        }
-                    }
+                    fun_name(&mut statics, &mut dynamics, value, arr, 0)?;
                 },
                 // signed immediate encoding
 
@@ -167,19 +136,12 @@ pub(super) fn compile_instruction(ctx: &mut Context, data: MatchData) -> Result<
                     // equivalent bitrange encodings for offsets
                     match relocation_type {
                         Relocation::B => {
-                                                bits = 16;
-                                                scaling = 2;
-                                                commands = &[
-                                                    // Command::BitRange(10, 16, 2),
-                                                    Command::Next
-                                                ];
+                                                let arr = &[10, 16];
+                                                fun_name(&mut statics, &mut dynamics, value, arr, 2)?;
                                             },
                         Relocation::J => {
-                                                bits = 26;
-                                                scaling = 2;
-                                                commands = &[
-                                                    Command::Next
-                                                ];
+                            let arr = &[0, 10, 10, 16];
+                            fun_name(&mut statics, &mut dynamics, value, arr, 2)?;
                                             },
                         Relocation::PC32 => {
                                                 bits = 32;
@@ -193,40 +155,11 @@ pub(super) fn compile_instruction(ctx: &mut Context, data: MatchData) -> Result<
                                             | Relocation::LITERAL32
                                             | Relocation::LITERAL64 => panic!("Literal relocation in instruction"),
                         Relocation::BZ => {
-                            bits = 32;
-                            scaling = 0;
-                            commands = &[
-                                Command::Next
-                            ];
+                            let arr = &[0, 5, 10, 16];
+                            fun_name(&mut statics, &mut dynamics, value, arr, 2)?;
                         },
-                                            }
-
-                    let span = value.span();
-                    let range = bitmask(bits);
-                    let min: i32 = (-1) << (bits - 1);
-
-                    let mut imm_encoder = ImmediateEncoder::new(value);
-                    imm_encoder.gather_fields(commands, 0, &mut statics);
-
-                    match imm_encoder.static_value {
-                        Some(static_value) => {
-                            static_range_check(value, min, range, scaling, span)?;
-                        },
-                        None => {
-                            let check = if scaling == 0 {
-                                quote_spanned!{ span =>
-                                    _dyn_imm.wrapping_sub(#min) as u32 > #range
-                                }
-                            } else {
-                                let zeromask = bitmask(scaling) as i32;
-                                quote_spanned!{ span =>
-                                    _dyn_imm.wrapping_sub(#min) as u32 > #range || _dyn_imm & #zeromask != 0i32
-                                }
-                            };
-
-                            imm_encoder.emit_dynamic(true, false, check, &mut dynamics);
-                        }
                     }
+
                 },
                 _ => panic!("Invalid argument processor")
             },
@@ -275,6 +208,40 @@ pub(super) fn compile_instruction(ctx: &mut Context, data: MatchData) -> Result<
     ctx.state.stmts.extend(relocations);
 
     Ok(())
+}
+
+fn fun_name(statics: &mut Vec<(u8, u32)>, dynamics: &mut Vec<(u8, TokenStream)>, value: &syn::Expr, arr: &[u8], scale :u8) -> Result<(), Option<String>> {
+    let bitlen = arr.iter().enumerate()
+    .filter(|(i, _)| i % 2 != 0)
+    .map(|(_, &val)| val)
+    .sum();
+    let mask = bitmask(bitlen);
+    let half = -1i32 << (bitlen - 1);
+    let span = value.span();
+    Ok(if let Some((_, scaled)) = static_range_check(value, half, mask, scale, span)? {
+        let mut consumed_len = 0;
+        for w in arr.windows(2).step_by(2) {
+            let offset = w[0];
+            let len = w[1];
+            consumed_len += len;
+            statics.push((offset, (scaled >> (bitlen - consumed_len) & bitmask(len))));
+            // dynamics.push((offset + 1, quote_spanned!{ span=>
+            //     (value >> #len) as u32
+            // }));
+        }
+
+    } else {
+        let check = dynamic_range_check_signed(value.span(), half, mask, scale);
+
+        for w in arr.windows(2).step_by(2) {
+            let offset = w[0];
+            let len = w[1];
+            let par_ask = bitmask(len);
+            dynamics.push((offset, quote_spanned!{ value.span()=>
+                {let _dyn_imm: i32 = #value; #check; ((value >> (#bitlen - #len)) as u32) & #par_ask }
+            }));
+        }
+    })
 }
 
 /// Handles the encoding of immediates in a somewhat efficient fashion.
