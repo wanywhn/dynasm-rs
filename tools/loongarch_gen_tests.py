@@ -279,15 +279,23 @@ class Register:
         elif self.family == "F":
             return f"$f{value}"
         elif self.family == "X":
-            return f"$x{value}"
+            return f"$xr{value}"
         elif self.family == "V":
             return f"$vr{value}"
         else:
             raise NotImplementedError(self.family)
             
     def emit_dynasm(self, value):
-        return self.emit_gas(value).replace("$", "");
-        # return f"{self.family}{value}"
+        if self.family == "R":
+            return f"r{value}"
+        elif self.family == "F":
+            return f"f{value}"
+        elif self.family == "X":
+            return f"x{value}"
+        elif self.family == "V":
+            return f"v{value}"
+        else:
+            raise NotImplementedError(self.family)
 
 class Immediate:
     def emit_gas(self, value):

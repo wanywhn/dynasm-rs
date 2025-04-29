@@ -16,14 +16,15 @@ pub(super) fn match_instruction(ctx: &mut Context, mut instruction: ParsedInstru
 
     let opdata = get_mnemonic_data(&instruction.name).ok_or_else(|| Some(format!("Unknown instruction mnemonic '{}'", instruction.name)))?;
     // FIXME
-    // println!("instructions.args: {:#?}", instruction.args);
+    println!("instructions.args: {:#?}", instruction.args);
 
     // Iterate through the supported instruction formats
     for data in opdata {
         // FIXME: This is a temporary workaround to make sure that we don't crash when trying to match instructions 
-        // println!("opdata: {:#?}", data);
+        println!("opdata: {:#?}", data);
 
         if let Some(mut match_data) = match_args(&instruction.args, data) {
+            println!("match_data: {:#?}", match_data);
             flatten_args(instruction.args, &mut match_data);
             return Ok(match_data)
         }
@@ -114,6 +115,7 @@ impl Matcher {
             RawArg::Register { reg, .. } => match self {
                 Matcher::R => reg.family() == RegFamily::INTEGER,
                 Matcher::F => reg.family() == RegFamily::FP,
+                Matcher::V => reg.family() == RegFamily::VECTOR,
                 Matcher::Reg(regid) => reg.as_id() == Some(*regid),
                 _ => false,
             },
