@@ -222,6 +222,12 @@ func argToProcessor(mnemonic string, arg *common.Arg) string {
 			return fmt.Sprintf("Sscaled(%d, %d, %d)", arg.Slots[0].Offset, arg.Slots[0].Width, 2)
 		}
 
+		if mnemonic == "vldrepl.h" || mnemonic == "sc.w" ||
+			mnemonic == "ll.d" || mnemonic == "sc.d" ||
+			mnemonic == "ldptr.w" || mnemonic == "stptr.w" ||
+			mnemonic == "ldptr.d" || mnemonic == "stptr.d" {
+			return fmt.Sprintf("Sscaled(%d, %d, %d)", arg.Slots[0].Offset, arg.Slots[0].Width, 1)
+		}
 		if len(arg.Slots) == 1 {
 			return fmt.Sprintf("SImm(%d, %d)", arg.Slots[0].Offset, arg.Slots[0].Width)
 		} else {
