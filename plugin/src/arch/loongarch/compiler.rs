@@ -8,7 +8,7 @@ use quote::{quote, quote_spanned};
 use proc_macro2::{TokenStream, Span};
 use proc_macro_error2::emit_error;
 
-use crate::parse_helpers::{as_signed_number};
+use crate::parse_helpers::as_signed_number;
 use crate::common::{Stmt, Size, delimited, bitmask};
 
 /// Compile a single instruction. Input is taken from `data`, containing both the arguments
@@ -157,7 +157,20 @@ pub(super) fn compile_instruction(ctx: &mut Context, data: MatchData) -> Result<
                     let arr = &[offset, len];
                     fun_name(&mut statics, &mut dynamics, value, arr, scale)?;
                 },
+                Command::Usubone(offset, bitlen) => {
+                    let mask = bitmask(bitlen);
 
+                    if let Some((biased, _)) = static_range_check(value, 1, mask, 0, value.span())? {
+                        statics.push((offset, biased));
+
+                    } else {
+                        let check = dynamic_range_check_unsigned(value.span(), 1, mask, 0);
+
+                        dynamics.push((offset, quote_spanned!{ value.span()=>
+                            { let _dyn_imm: u32 = #value; #check; (_dyn_imm - 1) & #mask }
+                        }));
+                    }
+                },
                 Command::Repeat |Command::Next | Command::R(_) |
                 Command::Rno0(_) |Command::F(_) | Command::C(_) |
                 Command::T(_) | Command::V(_) | Command::X(_) |

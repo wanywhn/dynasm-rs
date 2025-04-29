@@ -109,29 +109,29 @@ fn format_constraints(data: &Opdata) -> String {
             Command::R(_) => (),
             Command::Rno0(_) => constraints.push("rd cannot be r0".to_string()),
             Command::UImm(start, end) => {
-                        // let s = format!("0 <= imm <= {}", (1u32 << (end.wrapping_sub(*start) as u8)) - 1);
-                        // constraints.push(s);
-                    },
+                                // let s = format!("0 <= imm <= {}", (1u32 << (end.wrapping_sub(*start) as u8)) - 1);
+                                // constraints.push(s);
+                            },
             Command::SImm(start, end) => {
-                        // let s = format!("{} <= imm <= {}", - 1i32 << (end.wrapping_sub(*start) as u8) /2  - 1, 1i32 << (end.wrapping_sub(*start)as u8) /2);
-                        // constraints.push(s);
-                    },
+                                // let s = format!("{} <= imm <= {}", - 1i32 << (end.wrapping_sub(*start) as u8) /2  - 1, 1i32 << (end.wrapping_sub(*start)as u8) /2);
+                                // constraints.push(s);
+                            },
             Command::Ufields(array) => {
-                        let sum = sum_adjacent_diffs(array);
-                        let s = format!("0 <= imm <= {}", sum);
-                        constraints.push(s);
-                    },
+                                let sum = sum_adjacent_diffs(array);
+                                let s = format!("0 <= imm <= {}", sum);
+                                constraints.push(s);
+                            },
             Command::Sfields(array) => {
-                        let sum = sum_adjacent_diffs(array) as i16;
-                        let s = format!("{} <= imm <= {}", - sum / 2  - 1, sum / 2);
-                        constraints.push(s);
-                    },
+                                let sum = sum_adjacent_diffs(array) as i16;
+                                let s = format!("{} <= imm <= {}", - sum / 2  - 1, sum / 2);
+                                constraints.push(s);
+                            },
             Command::Offset(reloc) => match reloc {
-                        Relocation::B => constraints.push("16-bit offset, 2-byte aligned".to_string()),
-                        Relocation::J => constraints.push("26-bit offset, 2-byte aligned".to_string()),
-                        Relocation::PC32 => constraints.push("32-bit PC-relative offset".to_string()),
-                        _ => (),
-                    },
+                                Relocation::B => constraints.push("16-bit offset, 2-byte aligned".to_string()),
+                                Relocation::J => constraints.push("26-bit offset, 2-byte aligned".to_string()),
+                                Relocation::PC32 => constraints.push("32-bit PC-relative offset".to_string()),
+                                _ => (),
+                            },
             Command::Next | Command::Repeat => (),
             Command::F(_) => (),
             Command::C(_) => (),
@@ -139,14 +139,18 @@ fn format_constraints(data: &Opdata) -> String {
             Command::V(_) => (),
             Command::X(_) => (),
             Command::Uscaled(_, bits, scale) => {
-                let s = format!("value <= {}, value = {} * N", (1u32 << (bits + scale)) - 1, 1u32 << scale);
-                constraints.push(s);
+                        let s = format!("value <= {}, value = {} * N", (1u32 << (bits + scale)) - 1, 1u32 << scale);
+                        constraints.push(s);
 
-            }
+                    }
             Command::Sscaled(_, bits, scale) => {
-                let s = format!("-{} <= value <= {}, value = {} * N", 1u32 << (bits + scale - 1), (1u32 << (bits + scale - 1)) - 1, 1u32 << scale);
+                        let s = format!("-{} <= value <= {}, value = {} * N", 1u32 << (bits + scale - 1), (1u32 << (bits + scale - 1)) - 1, 1u32 << scale);
+                        constraints.push(s);
+                    }
+            Command::Usubone(_, bitlen) => {
+                let s = format!("1 <= value <= {}", 1u32 << bitlen);
                 constraints.push(s);
-            }
+            },
         }
     }
 
@@ -209,7 +213,7 @@ pub fn extract_opdata(name: &str, data: &Opdata) -> String {
     let mut first = true;
     let mut arg_idx = 0;
 
-    let mut constraints = extract_constraints(data).join(", ");
+    let constraints = extract_constraints(data).join(", ");
     for matcher in data.matchers {
         if first {
             buf.push(' ');
@@ -293,6 +297,9 @@ fn extract_constraints(data: &Opdata) -> Vec<String> {
             Command::Sscaled(_, len, shift) => {
                 format!("Range(-{}, {}, {})", 1u32 << (len - 1), (1u32 << (len-1)) - 1, shift)
             },
+            Command::Usubone(_, bitlen) => {
+                format!("Range(1, {}, {})", (1u32 << bitlen) + 1, 1)
+            }
         };
         constraints.push(format!("{}: {}", arg_idx, constraint));
         arg_idx += 1;

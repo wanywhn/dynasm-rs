@@ -132,6 +132,10 @@ pub enum Command {
     /// `(immediate >> shift) + (1 << (len - 1))` is in the range `0 .. (1 << len)`. Bottom `shift` bits are zero.
     /// `immediate >> shift` is encoded directly in a bitfield of length `len` at offset `pos`.
     Sscaled(u8, u8, u8),
+    /// format: `(pos, len)`
+    /// `immediate` is in the range `1 ..= (1 << len)`.
+    /// `(1 << len) - value)` is encoded in a bitfield of length `len` at offset `pos`.
+    Usubone(u8, u8),
     /// Unsigned immediate: start, len
     UImm(u8, u8),
     /// Signed immediate: start, len

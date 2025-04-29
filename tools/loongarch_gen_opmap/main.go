@@ -221,6 +221,7 @@ func argToProcessor(mnemonic string, arg *common.Arg) string {
 			mnemonic == "ldptr.d" || mnemonic == "stptr.d" {
 			return fmt.Sprintf("Sscaled(%d, %d, %d)", arg.Slots[0].Offset, arg.Slots[0].Width, 2)
 		}
+
 		if len(arg.Slots) == 1 {
 			return fmt.Sprintf("SImm(%d, %d)", arg.Slots[0].Offset, arg.Slots[0].Width)
 		} else {
@@ -231,6 +232,11 @@ func argToProcessor(mnemonic string, arg *common.Arg) string {
 			return fmt.Sprintf("Sfields(&[%s])", strings.Join(parts, ", "))
 		}
 	case common.ArgKindUnsignedImm:
+
+		if mnemonic == "alsl.w" || mnemonic == "alsl.d" || mnemonic == "alsl.wu" {
+			return fmt.Sprintf("Usubone(%d, %d)", arg.Slots[0].Offset, arg.Slots[0].Width)
+		}
+
 		if len(arg.Slots) == 1 {
 			return fmt.Sprintf("UImm(%d, %d)", arg.Slots[0].Offset, arg.Slots[0].Width)
 		} else {
