@@ -216,7 +216,7 @@ func argToProcessor(mnemonic string, arg *common.Arg) string {
 			return "Offset(BZ)"
 		}
 
-		if mnemonic == "vstelm.d" || mnemonic == "xvldrepl.d" {
+		if mnemonic == "vstelm.d" || mnemonic == "xvldrepl.d" || mnemonic == "xvstelm.d" {
 			return fmt.Sprintf("Sscaled(%d, %d, %d)", arg.Slots[0].Offset, arg.Slots[0].Width, 3)
 		}
 		if mnemonic == "ll.w" || mnemonic == "sc.w" || mnemonic == "vstelm.w" ||
@@ -227,7 +227,7 @@ func argToProcessor(mnemonic string, arg *common.Arg) string {
 		}
 
 		if mnemonic == "vldrepl.h" || mnemonic == "xvldrepl.h" ||
-			mnemonic == "vstelm.h" || mnemonic == "sc.d" ||
+			mnemonic == "vstelm.h" || mnemonic == "sc.d" || mnemonic == "xvstelm.h" ||
 			mnemonic == "ldptr.w" || mnemonic == "stptr.w" ||
 			mnemonic == "ldptr.d" || mnemonic == "stptr.d" {
 			return fmt.Sprintf("Sscaled(%d, %d, %d)", arg.Slots[0].Offset, arg.Slots[0].Width, 1)
