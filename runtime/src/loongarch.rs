@@ -2,9 +2,7 @@
 //! Runtime support for the LoongArch architecture assembling target.
 
 use crate::Register;
-use crate::relocations::{Relocation, RelocationSize, RelocationKind, ImpossibleRelocation, fits_signed_bitfield};
-use byteorder::{ByteOrder, LittleEndian};
-use std::convert::TryFrom;
+use crate::relocations::{Relocation, RelocationSize, RelocationKind, ImpossibleRelocation};
 
 /// Relocation implementation for the LoongArch architecture.
 #[derive(Debug, Clone)]

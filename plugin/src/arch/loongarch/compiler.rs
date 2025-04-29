@@ -1,4 +1,3 @@
-use std::mem::offset_of;
 
 use super::Context;
 use super::loongarchdata::{Command, Relocation};
@@ -129,9 +128,6 @@ pub(super) fn compile_instruction(ctx: &mut Context, data: MatchData) -> Result<
                                 }
                             },
                 Command::Offset(relocation_type) => {
-                                let bits;
-                                let scaling;
-                                let commands: &'static [Command];
 
                                 // equivalent bitrange encodings for offsets
                                 match relocation_type {
@@ -144,11 +140,6 @@ pub(super) fn compile_instruction(ctx: &mut Context, data: MatchData) -> Result<
                                         fun_name(&mut statics, &mut dynamics, value, arr, 2)?;
                                                         },
                                     Relocation::PC32 => {
-                                                            bits = 32;
-                                                            scaling = 0;
-                                                            commands = &[
-                                                                Command::Next
-                                                            ];
                                                         },
                                     Relocation::LITERAL8
                                                         | Relocation::LITERAL16

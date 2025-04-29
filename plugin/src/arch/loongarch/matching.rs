@@ -2,7 +2,7 @@ use proc_macro_error2::emit_error;
 use proc_macro2::Span;
 
 use super::{Context, LoongArchTarget};
-use super::ast::{ParsedInstruction, RawArg, MatchData, FlatArg, Register, RegId, RegFamily};
+use super::ast::{ParsedInstruction, RawArg, MatchData, FlatArg, Register, RegFamily};
 use super::loongarchdata::{Opdata, Matcher, get_mnemonic_data};
 use super::debug::format_opdata_list;
 
