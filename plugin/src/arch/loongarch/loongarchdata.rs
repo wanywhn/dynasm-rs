@@ -138,23 +138,26 @@ pub enum Command {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Relocation {
-    // Branch instructions (beq, bne, etc)
+    // Branch instructions (beq, bne, jirl)
     // 16-bit offset, 2-bit aligned
     B = 0,
+    // Branch instructions (beqz, bnez, bceqz, bcnez)
+    // 21-bit offset, 2-bit aligned
+    BZ = 1,
     // Jump instructions (b, bl)
     // 26-bit offset, 2-bit aligned
-    J = 1,
+    J = 2,
     // PC-relative load/store
     // 32-bit offset
-    PC32 = 2,
+    PC32 = 3,
     // 8-bit literal
-    LITERAL8 = 3,
+    LITERAL8 = 4,
     // 16-bit literal
-    LITERAL16 = 4,
+    LITERAL16 = 5,
     // 32-bit literal
-    LITERAL32 = 5,
+    LITERAL32 = 6,
     // 64-bit literal
-    LITERAL64 = 6,
+    LITERAL64 = 7,
 }
 
 impl Relocation {
@@ -166,7 +169,7 @@ impl Relocation {
         match self {
             Relocation::LITERAL8 => 1,
             Relocation::LITERAL16 => 2,
-            Relocation::B | Relocation::J | Relocation::PC32 | Relocation::LITERAL32 => 4,
+            Relocation::B |Relocation::BZ| Relocation::J | Relocation::PC32 | Relocation::LITERAL32 => 4,
             Relocation::LITERAL64 => 8,
         }
     }

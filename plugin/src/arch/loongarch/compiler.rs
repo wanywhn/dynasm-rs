@@ -166,36 +166,40 @@ pub(super) fn compile_instruction(ctx: &mut Context, data: MatchData) -> Result<
 
                     // equivalent bitrange encodings for offsets
                     match relocation_type {
-                        // 16-bit offset, 2-bit aligned
                         Relocation::B => {
-                            bits = 16;
-                            scaling = 2;
-                            commands = &[
-                                // Command::BitRange(10, 16, 2),
-                                Command::Next
-                            ];
-                        },
-                        // 26-bit offset, 2-bit aligned
+                                                bits = 16;
+                                                scaling = 2;
+                                                commands = &[
+                                                    // Command::BitRange(10, 16, 2),
+                                                    Command::Next
+                                                ];
+                                            },
                         Relocation::J => {
-                            bits = 26;
-                            scaling = 2;
-                            commands = &[
-                                Command::Next
-                            ];
-                        },
-                        // 32-bit PC-relative offset
+                                                bits = 26;
+                                                scaling = 2;
+                                                commands = &[
+                                                    Command::Next
+                                                ];
+                                            },
                         Relocation::PC32 => {
+                                                bits = 32;
+                                                scaling = 0;
+                                                commands = &[
+                                                    Command::Next
+                                                ];
+                                            },
+                        Relocation::LITERAL8
+                                            | Relocation::LITERAL16
+                                            | Relocation::LITERAL32
+                                            | Relocation::LITERAL64 => panic!("Literal relocation in instruction"),
+                        Relocation::BZ => {
                             bits = 32;
                             scaling = 0;
                             commands = &[
                                 Command::Next
                             ];
                         },
-                        Relocation::LITERAL8
-                        | Relocation::LITERAL16
-                        | Relocation::LITERAL32
-                        | Relocation::LITERAL64 => panic!("Literal relocation in instruction"),
-                    }
+                                            }
 
                     let span = value.span();
                     let range = bitmask(bits);
