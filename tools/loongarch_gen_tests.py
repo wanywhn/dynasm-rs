@@ -291,7 +291,7 @@ class Register:
         elif self.family == "F":
             return f"f{value}"
         elif self.family == "X":
-            return f"x{value}"
+            return f"v{value}"
         elif self.family == "V":
             return f"v{value}"
         else:
