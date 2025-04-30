@@ -164,7 +164,7 @@ class Range3(Range):
 
     def create_value(self, history):
         prev = history.values[-1]
-        return random.randrange(0, prev, self.step)
+        return random.randrange(0, prev + 1, self.step)
 
 class R(Constraint):
     """Register constraint"""
