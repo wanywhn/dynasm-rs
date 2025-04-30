@@ -65,9 +65,7 @@ pub(crate) fn from_str(s: &str) -> Option<Box<dyn Arch>> {
         "riscv64e" => Some(Box::new(riscv::ArchRiscV64E::default())),
         "riscv32i" | "riscv32" => Some(Box::new(riscv::ArchRiscV32I::default())),
         "riscv32e" => Some(Box::new(riscv::ArchRiscV32E::default())),
-        "loongarch32" | "la32" => Some(Box::new(loongarch::ArchLoongArch32::default())),
         "loongarch64" | "la64" => Some(Box::new(loongarch::ArchLoongArch64::default())),
-        "loongarch" | "la" => Some(Box::new(loongarch::ArchLoongArch64::default())),
         "unknown" => Some(Box::new(DummyArch::new())),
         _ => None
     }

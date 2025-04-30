@@ -190,7 +190,7 @@ pub fn dynasm_opmap(tokens: proc_macro::TokenStream) -> proc_macro::TokenStream 
         "x64" | "x86" => arch::x64::create_opmap(),
         "aarch64" => arch::aarch64::create_opmap(),
         "riscv" => arch::riscv::create_opmap(),
-        "loongarch" => arch::loongarch::create_opmap(),
+        "loongarch64" => arch::loongarch::create_opmap(),
         x => panic!("Unknown architecture {}", x)
     });
 
@@ -213,7 +213,7 @@ pub fn dynasm_extract(tokens: proc_macro::TokenStream) -> proc_macro::TokenStrea
         "x64" | "x86" => "UNIMPLEMENTED".into(),
         "aarch64" => arch::aarch64::extract_opmap(),
         "riscv" => arch::riscv::extract_opmap(),
-        "loongarch" => arch::loongarch::extract_opmap(),
+        "loongarch64" => arch::loongarch::extract_opmap(),
         x => panic!("Unknown architecture {}", x)
     };
 

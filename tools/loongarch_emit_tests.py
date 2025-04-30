@@ -26,7 +26,7 @@ def emit_test_case(i, dynasm, gas, bytes):
 fn {}_{}() {{
     let mut ops = dynasmrt::loongarch::Assembler::new().unwrap();
     dynasm!(ops
-        ; .arch loongarch
+        ; .arch loongarch64
         ; {}
     );
     let buf = ops.finalize().unwrap();
