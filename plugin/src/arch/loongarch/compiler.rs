@@ -8,7 +8,7 @@ use quote::{quote, quote_spanned};
 use proc_macro2::{TokenStream, Span};
 use proc_macro_error2::emit_error;
 
-use crate::parse_helpers::as_signed_number;
+use crate::parse_helpers::{as_signed_number, as_unsigned_number};
 use crate::common::{Stmt, Size, delimited, bitmask};
 
 /// Compile a single instruction. Input is taken from `data`, containing both the arguments
@@ -127,6 +127,77 @@ pub(super) fn compile_instruction(ctx: &mut Context, data: MatchData) -> Result<
                                     }));
                                 }
                             },
+                    Command::Usum(offset, bitlen) => {
+                        let mask = bitmask(bitlen);
+                        let prev_value = if let Some(FlatArg::Immediate {value: prev_value } ) = data.args.get(cursor - 1) {
+                            prev_value
+                        } else {
+                            panic!("Bad encoding data, previous argument was not an immediate");
+                        };
+    
+                        let number = if let Some(prev_number) = as_unsigned_number(prev_value) {
+                            if prev_number > mask as u64 {
+                                emit_error!(prev_value, "Impossible immediate combination");
+                                return Err(None);
+                            };
+    
+                            if let Some((biased, _)) = static_range_check(value, 1, mask - (prev_number as u32), 0, value.span())? {
+                                Some(biased + (prev_number as u32))
+                            } else {
+                                None
+                            }
+                        } else {
+                            None
+                        };
+    
+                        if let Some(number) = number {
+                            statics.push((offset, number & mask));
+                        } else {
+                            let check = quote_spanned!{ value.span()=>
+                                if (#value - 1u32) > (#mask - #prev_value) { ::dynasmrt::aarch64::immediate_out_of_range_unsigned_32(#value); }
+                            };
+    
+                            dynamics.push((offset, quote_spanned!{ value.span()=>
+                                { let _dyn_imm: u32 = #value; #check; (#prev_value + _dyn_imm - 1) & #mask }
+                            }));
+                        }
+                    },
+                    Command::Ulep(offset, bitlen) => {
+                        let mask = bitmask(bitlen);
+                        let prev_value = if let Some(FlatArg::Immediate {value: prev_value } ) = data.args.get(cursor - 1) {
+                            prev_value
+                        } else {
+                            panic!("Bad encoding data, previous argument was not an immediate");
+                        };
+    
+                        let number = if let Some(prev_number) = as_unsigned_number(prev_value) {
+                            if prev_number > mask as u64 {
+                                emit_error!(prev_value, "Impossible immediate combination");
+                                return Err(None);
+                            };
+    
+                            if let Some((biased, _)) = static_range_check(value, 0, prev_number as u32, 0, value.span())? {
+                                Some(biased)
+                            } else {
+                                None
+                            }
+                        } else {
+                            None
+                        };
+    
+                        if let Some(number) = number {
+                            statics.push((offset, number & mask));
+                        } else {
+
+                            let check = quote_spanned!{ value.span()=>
+                                if (#value) > (#prev_value) { ::dynasmrt::aarch64::immediate_out_of_range_unsigned_32(#value); }
+                            };
+    
+                            dynamics.push((offset, quote_spanned!{ value.span()=>
+                                { let _dyn_imm: u32 = #value; #check; (_dyn_imm) & #mask }
+                            }));
+                        }
+                    },
                 Command::Offset(relocation_type) => {
 
                                 // equivalent bitrange encodings for offsets
@@ -173,7 +244,7 @@ pub(super) fn compile_instruction(ctx: &mut Context, data: MatchData) -> Result<
                 },
                 Command::Repeat |Command::Next | Command::R(_) |
                 Command::Rno0(_) |Command::F(_) | Command::C(_) |
-                Command::T(_) | Command::V(_) | Command::X(_) |
+                Command::T(_) | Command::V(_) | Command::X(_) | Command::FCSR(_) |
                 Command::Ufields(_) => panic!("Invalid argument processor"),
             },
 

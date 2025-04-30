@@ -40,12 +40,15 @@ def read_opdata_file(f):
     templates = []
     context = {
         'Range': Range,
+        'Range2': Range2,
+        'Range3': Range3,
         'R': R,
         'F': F,
         'V': V,
         'X': X,
         'C': C,
         'T': T,
+        'FCSR': R,
         'List': List,
         'Special': Special
     }
@@ -100,8 +103,6 @@ class OpTemplate:
             lambda m: history.gas[int(m.group(2))], 
             self.template.strip('"'))
             
-        # gas_string = convert_args_to_gnu_as(gas_string)
-
         return dynasm_string, gas_string
 
 class History:
@@ -119,6 +120,8 @@ def parse_template(template):
         elif argty == "Off":
             arg = Offset()
         elif argty in "RFVX":
+            arg = Register(argty)
+        elif argty == "FCSR":
             arg = Register(argty)
         elif argty == "C":
             arg = Condition()
@@ -148,6 +151,20 @@ class Range(Constraint):
         
     def create_value(self, history=None):
         return random.randrange(self.min, self.max, self.step)
+
+class Range2(Range):
+    """A special range constraint"""
+
+    def create_value(self, history):
+        prev = history.values[-1]
+        return random.randrange(1, self.max - prev, self.step)
+
+class Range3(Range):
+    """A special range constraint"""
+
+    def create_value(self, history):
+        prev = history.values[-1]
+        return random.randrange(0, prev, self.step)
 
 class R(Constraint):
     """Register constraint"""
@@ -219,55 +236,6 @@ class Special(Constraint):
         if self.type == "loongarch_special":
             return random.choice([0, 1, 2, 3])
         return 0
-
-def convert_args_to_gnu_as(args):
-    """Convert dynasm args format to GNU as format"""
-    # First remove all parameter markers
-    clean_args = args.replace('<', '').replace('>', '')
-    parts = clean_args.split(', ')
-    converted = []
-    
-    for part in parts:
-        # Handle register arguments
-        if part.startswith("R,"):
-            reg_num = part[2:]
-            converted.append(f"r{reg_num}")
-        elif part.startswith("F,"):
-            reg_num = part[2:]
-            converted.append(f"f{reg_num}")
-        elif part.startswith("X,"):
-            reg_num = part[2:]
-            converted.append(f"x{reg_num}")
-        elif part.startswith("V,"):
-            reg_num = part[2:]
-            converted.append(f"vr{reg_num}")
-        elif part.startswith("XV,"):
-            reg_num = part[3:]
-            converted.append(f"xvr{reg_num}")
-        # Handle immediate arguments    
-        elif part.startswith("Imm,"):
-            imm_num = part[4:]
-            converted.append(f"{imm_num}")
-        # Handle offset arguments
-        elif part.startswith("Off,"):
-            off_num = part[4:]
-            converted.append(f".+{off_num}")
-        # Handle memory references
-        elif part.startswith("[R,"):
-            if ", Imm," in part:
-                # Memory with offset
-                inner = part[1:].split(', ')
-                reg_num = inner[0][2:]
-                imm_num = inner[1][4:]
-                converted.append(f"[r{reg_num}, #{imm_num}]")
-            else:
-                # Simple memory
-                reg_num = part[2:]
-                converted.append(f"[r{reg_num}]")
-        else:
-            converted.append(part)
-    
-    return ', '.join(converted)
 
 # Argument classes for LoongArch
 class Register:

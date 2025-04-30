@@ -117,6 +117,8 @@ pub enum Command {
     F(u8),
     /// A 3-bit floating point cond register encoding
     C(u8),
+    /// A 2-bit floating point control/status register encoding
+    FCSR(u8),
     /// A scratch register
     T(u8),
     /// A LAX register
@@ -138,6 +140,15 @@ pub enum Command {
     Usubone(u8, u8),
     /// Unsigned immediate: start, len
     UImm(u8, u8),
+    /// format: `(pos, len)`
+    /// `immediate` is in the range `1 ..= (1 << len) - prev_arg`
+    /// `immediate + prev_arg - 1` is encoded in a a bitfield of length `len` at offset `pos`
+    Usum(u8, u8),
+    /// format: `(pos, len)`
+    /// less or equal prev_arg
+    /// `immediate` is in the range `0 ..= prev_arg`
+    /// `immediate is encoded in a a bitfield of length `len` at offset `pos`
+    Ulep(u8, u8),
     /// Signed immediate: start, len
     SImm(u8, u8),
     /// Unsigned immediate: [start, end]+

@@ -121,6 +121,16 @@ fn format_constraints(data: &Opdata) -> String {
                                 let s = format!("0 <= imm <= {}", sum);
                                 constraints.push(s);
                             },
+            Command::Usum(_, bits) => {
+                // TODO add pre value?
+                let s = format!("1 <= value <= {} - prev arg", 1u32 << bits);
+                constraints.push(s);
+            },
+            Command::Ulep(_, _) => {
+                // TODO add pre value?
+                let s = format!("1 <= value <= prev arg");
+                constraints.push(s);
+            },
             Command::Sfields(array) => {
                                 let sum = sum_adjacent_diffs(array) as i16;
                                 let s = format!("{} <= imm <= {}", - sum / 2  - 1, sum / 2);
@@ -135,6 +145,9 @@ fn format_constraints(data: &Opdata) -> String {
             Command::Next | Command::Repeat => (),
             Command::F(_) => (),
             Command::C(_) => (),
+            Command::FCSR(_) => {
+                constraints.push("fcsr: 0 - 3".to_string());
+            },
             Command::T(_) => (),
             Command::V(_) => (),
             Command::X(_) => (),
@@ -275,6 +288,7 @@ fn extract_constraints(data: &Opdata) -> Vec<String> {
             Command::Next | Command::Repeat => continue,
             Command::F(_) => format!("F(0xFFFFFFFF)"),
             Command::C(_) => format!("C(0x7)"),
+            Command::FCSR(_) => format!("FCSR(0x3)"),
             Command::T(_) => format!("T(0xFFFFFFFF)"),
             Command::V(_) => format!("V(0xFFFFFFFF)"),
             Command::X(_) => format!("X(0xFFFFFFFF)"),
@@ -291,6 +305,10 @@ fn extract_constraints(data: &Opdata) -> Vec<String> {
                         .map(|(_, &x)| x as u32).sum::<u32>() - 1;
                         format!("Range(-{}, {}, {})", 1u32 << l, 1u32 << l -1 , 1)
                     },
+            Command::Usum(_, bits) => 
+                    format!("Range2(1, {}+1, 1)", 1u32 << bits),
+            Command::Ulep(_, bits) => 
+                    format!("Range3(0, {}, 1)", 1u32 << bits),
             Command::Uscaled(_, len, shift) => {
                 format!("Range(0, {}, {})", 1u32 << len, 1 << shift)
             }

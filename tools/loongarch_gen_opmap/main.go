@@ -118,12 +118,12 @@ func generateOpmapFile(path string, insns []*common.InsnDescription) error {
 			var procList []string
 
 			if insn.OrigFormat != nil {
-				for _, arg := range insn.OrigFormat.Args {
-					procList = append(procList, argToProcessor(mnemonic, arg))
+				for idx, arg := range insn.OrigFormat.Args {
+					procList = append(procList, argToProcessor(mnemonic, idx, arg))
 				}
 			} else {
-				for _, arg := range insn.Format.Args {
-					procList = append(procList, argToProcessor(mnemonic, arg))
+				for idx, arg := range insn.Format.Args {
+					procList = append(procList, argToProcessor(mnemonic, idx, arg))
 				}
 			}
 
@@ -181,7 +181,7 @@ func argToRust(mnemonic string, arg *common.Arg) string {
 }
 
 // argToProcessor 将操作数转换为处理器表达式
-func argToProcessor(mnemonic string, arg *common.Arg) string {
+func argToProcessor(mnemonic string, idx int, arg *common.Arg) string {
 	if arg == nil {
 		return "Unknown"
 	}
@@ -216,10 +216,11 @@ func argToProcessor(mnemonic string, arg *common.Arg) string {
 			return "Offset(BZ)"
 		}
 
-		if mnemonic == "vstelm.d" || mnemonic == "xvldrepl.d" || mnemonic == "xvstelm.d" {
+		if mnemonic == "vstelm.d" || mnemonic == "xvldrepl.d" || mnemonic == "xvstelm.d" ||
+			mnemonic == "vldrepl.d" {
 			return fmt.Sprintf("Sscaled(%d, %d, %d)", arg.Slots[0].Offset, arg.Slots[0].Width, 3)
 		}
-		if mnemonic == "ll.w" || mnemonic == "sc.w" || mnemonic == "vstelm.w" ||
+		if mnemonic == "ll.w" || mnemonic == "sc.w" || mnemonic == "vstelm.w" || mnemonic == "xvstelm.w" ||
 			mnemonic == "ll.d" || mnemonic == "sc.d" || mnemonic == "xvldrepl.w" ||
 			mnemonic == "ldptr.w" || mnemonic == "stptr.w" || mnemonic == "vldrepl.w" ||
 			mnemonic == "ldptr.d" || mnemonic == "stptr.d" {
@@ -246,7 +247,11 @@ func argToProcessor(mnemonic string, arg *common.Arg) string {
 		if mnemonic == "alsl.w" || mnemonic == "alsl.d" || mnemonic == "alsl.wu" {
 			return fmt.Sprintf("Usubone(%d, %d)", arg.Slots[0].Offset, arg.Slots[0].Width)
 		}
-
+		if (mnemonic == "bstrins.d" || mnemonic == "bstrins.w" ||
+			mnemonic == "bstrpick.d" || mnemonic == "bstrpick.w") &&
+			idx == 3 {
+			return fmt.Sprintf("Ulep(%d, %d)", arg.Slots[0].Offset, arg.Slots[0].Width)
+		}
 		if len(arg.Slots) == 1 {
 			return fmt.Sprintf("UImm(%d, %d)", arg.Slots[0].Offset, arg.Slots[0].Width)
 		} else {
