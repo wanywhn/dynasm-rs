@@ -98,33 +98,22 @@ func generateOpmapFile(path string, insns []*common.InsnDescription) error {
 			formattedBits := fmt.Sprintf("0b%s_%s_%s_%s",
 				bits[0:8], bits[8:16], bits[16:24], bits[24:32])
 
+			var args = insn.Format.Args
+
+			if insn.OrigFormat != nil {
+				args = insn.OrigFormat.Args
+			}
 			// 生成操作数列表
 			var argList []string
-			for _, arg := range insn.Format.Args {
-				argList = append(argList, argToRust(mnemonic, arg))
+			for idx, arg := range args {
+				argList = append(argList, argToRust(mnemonic, idx, arg))
 			}
-			/*
-			 *	b[lt,ge][u] are renamed to b[gt,le][u] with corresponding operand order swapped.
-			 *	All other two-register instructions have the operand in rd, rj order, except these jump instructions. To preserve semantics the names have to be tweaked accordingly. Also all other instructions with comparison semantics adopt the gt/le distinction, such as the boundary checks, so lt/ge is not consistent either.
-			 */
-			// if mnemonic == "beq" || mnemonic == "bne" ||
-			// 	mnemonic == "jirl" || mnemonic == "blt" || mnemonic == "bge" ||
-			// 	mnemonic == "bltu" || mnemonic == "bgeu" {
-			// 	var tmp = insn.Format.Args[0]
-			// 	insn.Format.Args[0] = insn.Format.Args[1]
-			// 	insn.Format.Args[1] = tmp
-			// }
+
 			// 生成处理器列表
 			var procList []string
 
-			if insn.OrigFormat != nil {
-				for idx, arg := range insn.OrigFormat.Args {
-					procList = append(procList, argToProcessor(mnemonic, idx, arg))
-				}
-			} else {
-				for idx, arg := range insn.Format.Args {
-					procList = append(procList, argToProcessor(mnemonic, idx, arg))
-				}
+			for idx, arg := range args {
+				procList = append(procList, argToProcessor(mnemonic, idx, arg))
 			}
 
 			file.WriteString(fmt.Sprintf("    %s = [%s] => [%s];\n",
@@ -139,14 +128,19 @@ func generateOpmapFile(path string, insns []*common.InsnDescription) error {
 }
 
 // argToRust 将操作数转换为Rust宏参数
-func argToRust(mnemonic string, arg *common.Arg) string {
+func argToRust(mnemonic string, idx int, arg *common.Arg) string {
 	if arg == nil {
 		return "Unknown"
 	}
 
 	switch arg.Kind {
 	case common.ArgKindIntReg:
-		return "R"
+		if (mnemonic == "movfcsr2gr" || mnemonic == "movgr2fcsr") &&
+			idx == 1 {
+			return "FCSR"
+		} else {
+			return "R"
+		}
 	case common.ArgKindFPReg:
 		return "F"
 	case common.ArgKindFCCReg:
@@ -191,7 +185,12 @@ func argToProcessor(mnemonic string, idx int, arg *common.Arg) string {
 
 	switch arg.Kind {
 	case common.ArgKindIntReg:
-		return fmt.Sprintf("R(%d)", arg.Slots[0].Offset)
+		if (mnemonic == "movfcsr2gr" || mnemonic == "movgr2fcsr") &&
+			idx == 1 {
+			return fmt.Sprintf("FCSR(%d)", arg.Slots[0].Offset)
+		} else {
+			return fmt.Sprintf("R(%d)", arg.Slots[0].Offset)
+		}
 	case common.ArgKindFPReg:
 		return fmt.Sprintf("F(%d)", arg.Slots[0].Offset)
 	case common.ArgKindVReg:

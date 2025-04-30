@@ -100,6 +100,7 @@ impl Matcher {
             RawArg::Immediate { value } => match self {
                 Matcher::R => false,
                 Matcher::F => false,
+                Matcher::FCSR => false,
                 Matcher::T => false,
                 Matcher::C => false,
                 Matcher::V => false,

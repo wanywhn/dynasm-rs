@@ -251,6 +251,8 @@ class Register:
             return f"$xr{value}"
         elif self.family == "V":
             return f"$vr{value}"
+        elif self.family == "FCSR":
+            return f"fcsr{value}"
         else:
             raise NotImplementedError(self.family)
             
@@ -263,6 +265,8 @@ class Register:
             return f"v{value}"
         elif self.family == "V":
             return f"v{value}"
+        elif self.family == "FCSR":
+            return f"fcsr{value}"
         else:
             raise NotImplementedError(self.family)
 

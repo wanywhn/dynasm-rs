@@ -79,6 +79,7 @@ pub fn format_opdata(name: &str, data: &Opdata) -> String {
             Matcher::T => buf.push_str("scratch"),
             Matcher::V => buf.push_str("lsx-reg"),
             Matcher::X => buf.push_str("lasx-reg"),
+            Matcher::FCSR => buf.push_str("fcsr"),
         }
     }
 
@@ -248,6 +249,7 @@ pub fn extract_opdata(name: &str, data: &Opdata) -> String {
                 Matcher::T => write!(buf, "<T,{}>", arg_idx).unwrap(),
                 Matcher::V => write!(buf, "<V,{}>", arg_idx).unwrap(),
                 Matcher::X => write!(buf, "<X,{}>", arg_idx).unwrap(),
+                Matcher::FCSR => write!(buf, "<FCSR,{}>", arg_idx).unwrap(),
             }
 
         arg_idx += match matcher {

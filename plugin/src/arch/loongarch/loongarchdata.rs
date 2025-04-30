@@ -79,6 +79,8 @@ pub enum Matcher {
     F,
     /// 条件标志寄存器
     C,
+    /// fcsr
+    FCSR,
     /// A scratch register
     T,
     /// A LAX register
