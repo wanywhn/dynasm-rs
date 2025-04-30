@@ -48,6 +48,13 @@ pub enum RegId {
     V20 = 0x54, V21 = 0x55, V22 = 0x56, V23 = 0x57,
     V24 = 0x58, V25 = 0x59, V26 = 0x5A, V27 = 0x5B,
     V28 = 0x5C, V29 = 0x5D, V30 = 0x5E, V31 = 0x5F,
+
+    // CFR
+    FCC0 = 0x60, FCC1 = 0x61, FCC2 = 0x62, FCC3 = 0x63,
+    FCC4 = 0x64, FCC5 = 0x65, FCC6 = 0x66, FCC7 = 0x67,
+
+    // FCSR
+    FCSR0 = 0x80, FCSR1 = 0x81, FCSR2 = 0x82, FCSR3 = 0x83,
 }
 
 /// Register families
@@ -56,6 +63,8 @@ pub enum RegFamily {
     INTEGER = 0,
     FP = 1,
     VECTOR = 2,
+    FCC = 3,
+    FCSR = 4,
 }
 
 impl RegId {
@@ -70,6 +79,8 @@ impl RegId {
             0 => RegFamily::INTEGER,
             1 => RegFamily::FP,
             2 => RegFamily::VECTOR,
+            3 => RegFamily::FCC,
+            4 => RegFamily::FCSR,
             _ => unreachable!(),
         }
     }
@@ -81,6 +92,8 @@ impl fmt::Display for RegId {
             RegFamily::INTEGER => write!(f, "r{}", self.code()),
             RegFamily::FP => write!(f, "f{}", self.code()),
             RegFamily::VECTOR => write!(f, "v{}", self.code()),
+            RegFamily::FCC => write!(f, "fcc{}", self.code()),
+            RegFamily::FCSR => write!(f, "fcsr{}", self.code()),
         }
     }
 }

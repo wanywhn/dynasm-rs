@@ -117,6 +117,7 @@ impl Matcher {
                 Matcher::F => reg.family() == RegFamily::FP,
                 Matcher::V => reg.family() == RegFamily::VECTOR,
                 Matcher::X => reg.family() == RegFamily::VECTOR,
+                Matcher::C => reg.family() == RegFamily::FCC,
                 Matcher::Reg(regid) => reg.as_id() == Some(*regid),
                 _ => false,
             },

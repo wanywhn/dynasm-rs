@@ -48,7 +48,7 @@ pub(super) fn compile_instruction(ctx: &mut Context, data: MatchData) -> Result<
                 let code = id.code();
 
                 let offset = match *command {
-                    Command::R(offset) | Command::F(offset) | Command::V(offset) | Command::X(offset)=> offset,
+                    Command::R(offset) | Command::F(offset) | Command::C(offset) | Command::V(offset) | Command::X(offset)=> offset,
                     Command::Rno0(offset) => {
                         if code == 0 {
                             emit_error!(span, "This register must not be r0");

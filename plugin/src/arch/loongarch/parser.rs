@@ -201,6 +201,13 @@ lazy_static! {
             ("v20", V20), ("v21", V21), ("v22", V22), ("v23", V23),
             ("v24", V24), ("v25", V25), ("v26", V26), ("v27", V27),
             ("v28", V28), ("v29", V29), ("v30", V30), ("v31", V31),
+
+            // CFR
+            ("fcc0", FCC0), ("fcc1", FCC1), ("fcc2", FCC2), ("fcc3", FCC3),
+            ("fcc4", FCC4), ("fcc5", FCC5), ("fcc6", FCC6), ("fcc7", FCC7),
+
+            // FCSR
+            ("fcsr0", FCSR0), ("fcsr1", FCSR1), ("fcsr2", FCSR2), ("fcsr3", FCSR3),
         ];
         MAP.iter().cloned().collect()
     };

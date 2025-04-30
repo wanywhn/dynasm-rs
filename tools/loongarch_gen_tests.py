@@ -177,11 +177,12 @@ class List(Constraint):
 
 class C(Constraint):
     """Condition constraint"""
-    def __init__(self, cond):
-        self.cond = cond
+    def __init__(self, mask):
+        self.mask = mask
+        self.valid_regs = [i for i in range(32) if (mask & (1 << i))]
         
     def create_value(self, history=None):
-        return self.cond
+        return random.choice(self.valid_regs)
 
 class X(Constraint):
     """Extended register constraint"""
@@ -313,10 +314,10 @@ class Offset(Immediate):
 
 class Condition:
     def emit_gas(self, value):
-        return str(value)
+        return f"$fcc{value}"
         
     def emit_dynasm(self, value):
-        return f"C{value}"
+        return f"fcc{value}"
 
 class Template:
     def emit_gas(self, value):

@@ -274,7 +274,7 @@ fn extract_constraints(data: &Opdata) -> Vec<String> {
             Command::Offset(Relocation::PC32) => format!("Range(-{}, {}, {})", 1u64<<63, 1u64<<63, 1),
             Command::Next | Command::Repeat => continue,
             Command::F(_) => format!("F(0xFFFFFFFF)"),
-            Command::C(_) => format!("C(0xFFFFFFFF)"),
+            Command::C(_) => format!("C(0x7)"),
             Command::T(_) => format!("T(0xFFFFFFFF)"),
             Command::V(_) => format!("V(0xFFFFFFFF)"),
             Command::X(_) => format!("X(0xFFFFFFFF)"),
