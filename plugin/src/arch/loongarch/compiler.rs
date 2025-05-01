@@ -229,7 +229,7 @@ pub(super) fn compile_instruction(ctx: &mut Context, data: MatchData) -> Result<
                                         fun_name(&mut statics, &mut dynamics, value, arr, 0)?;
                                     },
                                     Relocation::SI12 => {
-                                        let arr = &[10, 14];
+                                        let arr = &[10, 12];
                                         fun_name(&mut statics, &mut dynamics, value, arr, 0)?;
                                     },
                                     Relocation::SI16 => {
