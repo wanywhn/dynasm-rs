@@ -185,7 +185,7 @@ pub enum Relocation {
     LITERAL64 = 7,
     // 20-bit offset, 2-bit aligned
     SI20 = 8,
-    // 14-bit offset,
+    // 14-bit offset, 2-bit aligned
     SI14 = 9,
     // 16-bit offset,
     SI16 = 10,

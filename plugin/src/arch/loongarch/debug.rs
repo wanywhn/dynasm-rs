@@ -282,7 +282,7 @@ fn extract_constraints(data: &Opdata) -> Vec<String> {
             Command::Offset(Relocation::BZ) => format!("Range(-{}, {}, {})", 1<<20, 1<<20, 4),
             Command::Offset(Relocation::J) => format!("Range(-{}, {}, {})", 1<<25, 1<<25, 4),
             Command::Offset(Relocation::SI20) => format!("Range(-{}, {}, {})", 1u64<<19, 1u64<<19, 4),
-            Command::Offset(Relocation::SI14) => format!("Range(-{}, {}, {})", 1u64<<13, 1u64<<13, 1),
+            Command::Offset(Relocation::SI14) => format!("Range(-{}, {}, {})", 1u64<<13, 1u64<<13, 4),
             Command::Offset(Relocation::SI16) => format!("Range(-{}, {}, {})", 1u64<<15, 1u64<<15, 1),
             Command::Offset(Relocation::SI12) => format!("Range(-{}, {}, {})", 1u64<<11, 1u64<<11, 1),
             // TODO: is this need?

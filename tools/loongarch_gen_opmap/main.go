@@ -379,14 +379,14 @@ func processSpecialInstructions(descs []InsnDescription) []InsnDescription {
 		"fst.s": ArgKindOffsetSI12,
 		"fst.d": ArgKindOffsetSI12,
 
-		// "ll.w": ArgKindOffsetSI14,
-		// "sc.w": ArgKindOffsetSI14,
-		// "ll.d": ArgKindOffsetSI14,
-		// "sc.d": ArgKindOffsetSI14,
-		// "ldptr.w": ArgKindOffsetSI14,
-		// "stptr.w": ArgKindOffsetSI14,
-		// "ldptr.d": ArgKindOffsetSI14,
-		// "stptr.d": ArgKindOffsetSI14,
+		"ll.w":    ArgKindOffsetSI14,
+		"sc.w":    ArgKindOffsetSI14,
+		"ll.d":    ArgKindOffsetSI14,
+		"sc.d":    ArgKindOffsetSI14,
+		"ldptr.w": ArgKindOffsetSI14,
+		"stptr.w": ArgKindOffsetSI14,
+		"ldptr.d": ArgKindOffsetSI14,
+		"stptr.d": ArgKindOffsetSI14,
 
 		"pcaddi":    ArgKindOffsetSI20,
 		"pcaddu12i": ArgKindOffsetSI20,
@@ -457,6 +457,8 @@ func argToProcessor(mnemonic string, idx int, arg *Arg) string {
 
 		"ll.d": 2,
 		"sc.d": 2,
+		"ll.w": 2,
+		"sc.w": 2,
 
 		// "st.h": 1,
 		// "st.w": 2,
@@ -477,9 +479,6 @@ func argToProcessor(mnemonic string, idx int, arg *Arg) string {
 		// "pcaddu12i": 2,
 		// "pcaddu18i": 2,
 		// "pcalau12i": 2,
-
-		"ll.w": 2,
-		"sc.w": 2,
 
 		"ldptr.w": 2,
 		"stptr.w": 2,
