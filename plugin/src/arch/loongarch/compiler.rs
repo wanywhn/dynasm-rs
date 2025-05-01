@@ -56,7 +56,7 @@ pub(super) fn compile_instruction(ctx: &mut Context, data: MatchData) -> Result<
                         }
                         offset
                     },
-                    _ => panic!("Invalid argument processor")
+                    _ => panic!("Invalid argument processor, arg:{:?}, command:{:?}", arg, command)
                 };
 
                 statics.push((offset, u32::from(code)));
@@ -79,7 +79,7 @@ pub(super) fn compile_instruction(ctx: &mut Context, data: MatchData) -> Result<
                         }
                     }));
                 },
-                _ => panic!("Invalid argument processor")
+                _ => panic!("Invalid argument processor, arg:{:?}, command:{:?}", arg, command)
             },
 
             FlatArg::Default => match *command {
@@ -89,7 +89,7 @@ pub(super) fn compile_instruction(ctx: &mut Context, data: MatchData) -> Result<
                 | Command::Ufields(_)
                 | Command::Sfields(_)
                 | Command::Next => (),
-                _ => panic!("Invalid argument processor")
+                _ => panic!("Invalid argument processor, arg:{:?}, command:{:?}", arg, command)
             },
 
             FlatArg::Immediate { ref value } => match *command {
@@ -203,22 +203,38 @@ pub(super) fn compile_instruction(ctx: &mut Context, data: MatchData) -> Result<
                                 // equivalent bitrange encodings for offsets
                                 match relocation_type {
                                     Relocation::B => {
-                                                            let arr = &[10, 16];
-                                                            fun_name(&mut statics, &mut dynamics, value, arr, 2)?;
-                                                        },
+                                                                                            let arr = &[10, 16];
+                                                                                            fun_name(&mut statics, &mut dynamics, value, arr, 2)?;
+                                                                                        },
                                     Relocation::J => {
-                                        let arr = &[0, 10, 10, 16];
-                                        fun_name(&mut statics, &mut dynamics, value, arr, 2)?;
-                                                        },
+                                                                        let arr = &[0, 10, 10, 16];
+                                                                        fun_name(&mut statics, &mut dynamics, value, arr, 2)?;
+                                                                                        },
                                     Relocation::PC32 => {
-                                                        },
+                                                                                        },
                                     Relocation::LITERAL8
-                                                        | Relocation::LITERAL16
-                                                        | Relocation::LITERAL32
-                                                        | Relocation::LITERAL64 => panic!("Literal relocation in instruction"),
+                                                                                        | Relocation::LITERAL16
+                                                                                        | Relocation::LITERAL32
+                                                                                        | Relocation::LITERAL64 => panic!("Literal relocation in instruction"),
                                     Relocation::BZ => {
-                                        let arr = &[0, 5, 10, 16];
-                                        fun_name(&mut statics, &mut dynamics, value, arr, 2)?;
+                                                                        let arr = &[0, 5, 10, 16];
+                                                                        fun_name(&mut statics, &mut dynamics, value, arr, 2)?;
+                                                                    },
+                                    Relocation::SI20 => {
+                                        let arr = &[5, 20];
+                                        fun_name(&mut statics, &mut dynamics, value, arr, 0)?;
+                                    },
+                                    Relocation::SI14 => {
+                                        let arr = &[10, 14];
+                                        fun_name(&mut statics, &mut dynamics, value, arr, 0)?;
+                                    },
+                                    Relocation::SI12 => {
+                                        let arr = &[10, 14];
+                                        fun_name(&mut statics, &mut dynamics, value, arr, 0)?;
+                                    },
+                                    Relocation::SI16 => {
+                                        let arr = &[10, 16];
+                                        fun_name(&mut statics, &mut dynamics, value, arr, 0)?;
                                     },
                                 }
 
@@ -245,7 +261,7 @@ pub(super) fn compile_instruction(ctx: &mut Context, data: MatchData) -> Result<
                 Command::Repeat |Command::Next | Command::R(_) |
                 Command::Rno0(_) |Command::F(_) | Command::C(_) |
                 Command::T(_) | Command::V(_) | Command::X(_) | Command::FCSR(_) |
-                Command::Ufields(_) => panic!("Invalid argument processor"),
+                Command::Ufields(_) => panic!("Invalid argument processor, arg:{:?}, command:{:?}", arg, command),
             },
 
             FlatArg::JumpTarget { ref jump } => match *command {
@@ -254,7 +270,7 @@ pub(super) fn compile_instruction(ctx: &mut Context, data: MatchData) -> Result<
                     let stmt = jump.clone().encode(relocation.size(), relocation.size(), &[relocation.to_id()]);
                     relocations.push(stmt);
                 },
-                _ => panic!("Invalid argument processor")
+                _ => panic!("Invalid argument processor, arg:{:?}, command:{:?}", arg, command)
             }
         }
 
@@ -479,7 +495,8 @@ fn static_range_check(expr: &syn::Expr, min: i32, range: u32, scale: u8, span: S
     // arithmetic right shift
     let scaled: i64 = value >> scale;
     if scaled << scale != value {
-        emit_error!(expr, "Unrepresentable immediate");
+        emit_error!(expr, "Unrepresentable immediate scaled:{} scale:{} value:{} min:{} range:{}",
+        scaled, scale, value, min, range);
         return Err(None);
     }
 

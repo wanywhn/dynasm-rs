@@ -58,6 +58,12 @@ const (
 	ArgKindXReg        ArgKind = 6
 	ArgKindSignedImm   ArgKind = 7
 	ArgKindUnsignedImm ArgKind = 8
+	ArgKindOffsetSI20  ArgKind = 9
+	ArgKindRefOffset   ArgKind = 10
+	ArgKindRefLabel    ArgKind = 11
+	ArgKindOffsetSI14  ArgKind = 12
+	ArgKindOffsetSI12  ArgKind = 13
+	ArgKindOffsetSI16  ArgKind = 14
 )
 
 func main() {
@@ -92,7 +98,10 @@ func main() {
 		})
 	}
 
-	// 2. 生成opmap.rs文件
+	// 2. 对特定指令进行特殊处理
+	descs = processSpecialInstructions(descs)
+
+	// 3. 生成opmap.rs文件
 	if err := generateOpmapFile(outputFile, descs); err != nil {
 		fmt.Printf("Error generating opmap.rs: %v\n", err)
 		os.Exit(1)
@@ -213,18 +222,11 @@ func argToRust(mnemonic string, idx int, arg *Arg) string {
 		return "V"
 	case ArgKindXReg:
 		return "X"
-	case ArgKindSignedImm:
-		// 特殊处理分支指令
-		if mnemonic == "beq" || mnemonic == "bne" || mnemonic == "blt" ||
-			mnemonic == "bge" || mnemonic == "bltu" || mnemonic == "bgeu" ||
-			mnemonic == "jirl" || mnemonic == "b" || mnemonic == "bl" ||
-			mnemonic == "beqz" || mnemonic == "bnez" || mnemonic == "bceqz" ||
-			mnemonic == "bcnez" {
-			return "Offset"
-		}
+	case ArgKindSignedImm, ArgKindUnsignedImm:
 		return "Imm"
-	case ArgKindUnsignedImm:
-		return "Imm"
+	case ArgKindOffsetSI20, ArgKindOffsetSI12, ArgKindOffsetSI14, ArgKindOffsetSI16:
+		return "Offset"
+
 	default:
 		if len(arg.Slots) == 0 {
 			return "Unknown"
@@ -252,6 +254,41 @@ func convertFormat(f *common.InsnFormat) *InsnFormat {
 	return &InsnFormat{Args: args}
 }
 
+func copyFormat(f *InsnFormat) *InsnFormat {
+	if f == nil {
+		return nil
+	}
+	var args []*Arg
+	for _, a := range f.Args {
+		args = append(args, &Arg{
+			Kind:  ArgKind(a.Kind),
+			Slots: copySlots(a.Slots),
+			Post:  copyPost(a.Post),
+		})
+	}
+	return &InsnFormat{Args: args}
+}
+
+// convertSlots 转换 common.Slot 到本地 Slot
+func copySlots(slots []*Slot) []*Slot {
+	var result []*Slot
+	for _, s := range slots {
+		result = append(result, &Slot{
+			Offset: s.Offset,
+			Width:  s.Width,
+		})
+	}
+	return result
+}
+
+// convertPost 转换 common.PostprocessOp 到本地 PostprocessOp
+func copyPost(p PostprocessOp) PostprocessOp {
+	return PostprocessOp{
+		Kind:   PostprocessOpKind(p.Kind),
+		Amount: p.Amount,
+	}
+}
+
 // convertSlots 转换 common.Slot 到本地 Slot
 func convertSlots(slots []*common.Slot) []*Slot {
 	var result []*Slot
@@ -272,6 +309,141 @@ func convertPost(p common.PostprocessOp) PostprocessOp {
 	}
 }
 
+// processSpecialInstructions 处理特定指令的参数类型
+func processSpecialInstructions(descs []InsnDescription) []InsnDescription {
+	// offset_insn := map[string]bool{
+	// 	"pcaddi":    true,
+	// 	"pcaddu12i": true,
+	// 	"pcaddu18i": true,
+	// 	"pcalau12i": true,
+	// 	"beq":       true,
+	// 	"bne":       true,
+	// 	"blt":       true,
+	// 	"bge":       true,
+	// 	"bltu":      true,
+	// 	"bgeu":      true,
+	// 	"beqz":      true,
+	// 	"bnez":      true,
+	// 	"b":         true,
+	// 	"bl":        true,
+	// 	"jirl":      true,
+	// 	"bceqz":     true,
+	// 	"bcnez":     true,
+	// }
+
+	// for i := range descs {
+	// 	desc := &descs[i]
+	// 	mnemonic := desc.Mnemonic
+	// 	if origName, ok := desc.Attribs["orig_name"]; ok && origName != desc.Mnemonic {
+	// 		mnemonic = origName
+	// 	}
+
+	// 	if !offset_insn[mnemonic] {
+	// 		continue
+	// 	}
+
+	// 	format := desc.OrigFormat
+	// 	if format == nil {
+	// 		format = desc.Format
+	// 	}
+	// 	if format == nil {
+	// 		continue
+	// 	}
+	// 	desc.Format = format
+	// 	for _, arg := range format.Args {
+	// 		if arg.Kind == ArgKindSignedImm {
+	// 			arg.Kind = ArgKindOffsetSI20
+	// 		}
+	// 	}
+	// }
+
+	load_store_insn := map[string]ArgKind{
+		// "ld.b":  ArgKindOffsetSI12,
+		// "ld.d":  ArgKindOffsetSI12,
+		// "ld.h":  ArgKindOffsetSI12,
+		// "ld.w":  ArgKindOffsetSI12,
+		// "st.b":  ArgKindOffsetSI12,
+		// "st.h":  ArgKindOffsetSI12,
+		// "st.w":  ArgKindOffsetSI12,
+		// "st.d":  ArgKindOffsetSI12,
+		// "ld.bu": ArgKindOffsetSI12,
+		// "ld.du": ArgKindOffsetSI12,
+		// "ld.hu": ArgKindOffsetSI12,
+		// "ld.wu": ArgKindOffsetSI12,
+		// "st.bu": ArgKindOffsetSI12,
+		// "st.hu": ArgKindOffsetSI12,
+		// "st.wu": ArgKindOffsetSI12,
+		// "st.du": ArgKindOffsetSI12,
+		// "fld.s": ArgKindOffsetSI12,
+		// "fld.d": ArgKindOffsetSI12,
+		// "fst.s": ArgKindOffsetSI12,
+		// "fst.d": ArgKindOffsetSI12,
+
+		// "ll.w":    ArgKindOffsetSI14,
+		// "sc.w":    ArgKindOffsetSI14,
+		// "ll.d":    ArgKindOffsetSI14,
+		// "sc.d":    ArgKindOffsetSI14,
+		// "ldptr.w": ArgKindOffsetSI14,
+		// "stptr.w": ArgKindOffsetSI14,
+		// "ldptr.d": ArgKindOffsetSI14,
+		// "stptr.d": ArgKindOffsetSI14,
+
+		"pcaddi":    ArgKindOffsetSI20,
+		"pcaddu12i": ArgKindOffsetSI20,
+		"pcaddu18i": ArgKindOffsetSI20,
+		"pcalau12i": ArgKindOffsetSI20,
+		"beq":       ArgKindOffsetSI20,
+		"bne":       ArgKindOffsetSI20,
+		"blt":       ArgKindOffsetSI20,
+		"bge":       ArgKindOffsetSI20,
+		"bltu":      ArgKindOffsetSI20,
+		"bgeu":      ArgKindOffsetSI20,
+		"beqz":      ArgKindOffsetSI20,
+		"bnez":      ArgKindOffsetSI20,
+		"b":         ArgKindOffsetSI20,
+		"bl":        ArgKindOffsetSI20,
+		"jirl":      ArgKindOffsetSI20,
+		"bceqz":     ArgKindOffsetSI20,
+		"bcnez":     ArgKindOffsetSI20,
+	}
+
+	var tmp_descs []InsnDescription
+
+	for i := range descs {
+		desc := &descs[i]
+		mnemonic := desc.Mnemonic
+		if origName, ok := desc.Attribs["orig_name"]; ok && origName != desc.Mnemonic {
+			mnemonic = origName
+		}
+		_, ok := load_store_insn[mnemonic]
+		if !ok {
+			continue
+		}
+
+		tmp_descs = append(tmp_descs, InsnDescription{
+			Word:       desc.Word,
+			Mnemonic:   desc.Mnemonic,
+			Format:     copyFormat(desc.Format),
+			OrigFormat: copyFormat(desc.OrigFormat),
+			Attribs:    desc.Attribs,
+		})
+
+		format := desc.OrigFormat
+		if format == nil {
+			format = desc.Format
+		}
+
+		for _, arg := range format.Args {
+			if arg.Kind == ArgKindSignedImm {
+				arg.Kind = load_store_insn[mnemonic]
+			}
+		}
+	}
+
+	descs = append(descs, tmp_descs...)
+	return descs
+}
+
 // argToProcessor 将操作数转换为处理器表达式
 func argToProcessor(mnemonic string, idx int, arg *Arg) string {
 	if arg == nil {
@@ -279,6 +451,64 @@ func argToProcessor(mnemonic string, idx int, arg *Arg) string {
 	}
 	if len(arg.Slots) == 0 {
 		return "Unknown"
+	}
+
+	insn_scaled := map[string]int{
+
+		"ll.d": 2,
+		"sc.d": 2,
+
+		// "st.h": 1,
+		// "st.w": 2,
+		// "st.d": 3,
+
+		// "ld.h":  1,
+		// "ld.w":  2,
+		// "ld.d":  3,
+		// "ld.hu": 2,
+		// "ld.wu": 2,
+
+		"vldrepl.h":  1,
+		"vstelm.h":   1,
+		"xvldrepl.h": 1,
+		"xvstelm.h":  1,
+
+		// "pcaddi":    1,
+		// "pcaddu12i": 2,
+		// "pcaddu18i": 2,
+		// "pcalau12i": 2,
+
+		"ll.w": 2,
+		"sc.w": 2,
+
+		"ldptr.w": 2,
+		"stptr.w": 2,
+		"ldptr.d": 2,
+		"stptr.d": 2,
+
+		"vldrepl.w":  2,
+		"vstelm.w":   2,
+		"xvldrepl.w": 2,
+		"xvstelm.w":  2,
+
+		"vldrepl.d":  3,
+		"vstelm.d":   3,
+		"xvldrepl.d": 3,
+		"xvstelm.d":  3,
+
+		"beq":   2,
+		"bne":   2,
+		"blt":   2,
+		"bge":   2,
+		"bltu":  2,
+		"bgeu":  2,
+		"beqz":  2,
+		"bnez":  2,
+		"b":     2,
+		"bl":    2,
+		"jirl":  2,
+		"bceqz": 2,
+		"bcnez": 2,
 	}
 
 	switch arg.Kind {
@@ -300,35 +530,9 @@ func argToProcessor(mnemonic string, idx int, arg *Arg) string {
 	case ArgKindScratchReg:
 		return fmt.Sprintf("T(%d)", arg.Slots[0].Offset)
 	case ArgKindSignedImm:
-		// 特殊处理分支指令
-		if mnemonic == "beq" || mnemonic == "bne" ||
-			mnemonic == "blt" || mnemonic == "bge" ||
-			mnemonic == "bltu" || mnemonic == "bgeu" ||
-			mnemonic == "jirl" {
-			return "Offset(B)"
-		} else if mnemonic == "b" || mnemonic == "bl" {
-			return "Offset(J)"
-		} else if mnemonic == "beqz" || mnemonic == "bnez" ||
-			mnemonic == "bceqz" || mnemonic == "bcnez" {
-			return "Offset(BZ)"
-		}
-
-		if mnemonic == "vstelm.d" || mnemonic == "xvldrepl.d" || mnemonic == "xvstelm.d" ||
-			mnemonic == "vldrepl.d" {
-			return fmt.Sprintf("Sscaled(%d, %d, %d)", arg.Slots[0].Offset, arg.Slots[0].Width, 3)
-		}
-		if mnemonic == "ll.w" || mnemonic == "sc.w" || mnemonic == "vstelm.w" || mnemonic == "xvstelm.w" ||
-			mnemonic == "ll.d" || mnemonic == "sc.d" || mnemonic == "xvldrepl.w" ||
-			mnemonic == "ldptr.w" || mnemonic == "stptr.w" || mnemonic == "vldrepl.w" ||
-			mnemonic == "ldptr.d" || mnemonic == "stptr.d" {
-			return fmt.Sprintf("Sscaled(%d, %d, %d)", arg.Slots[0].Offset, arg.Slots[0].Width, 2)
-		}
-
-		if mnemonic == "vldrepl.h" || mnemonic == "xvldrepl.h" ||
-			mnemonic == "vstelm.h" || mnemonic == "sc.d" || mnemonic == "xvstelm.h" ||
-			mnemonic == "ldptr.w" || mnemonic == "stptr.w" ||
-			mnemonic == "ldptr.d" || mnemonic == "stptr.d" {
-			return fmt.Sprintf("Sscaled(%d, %d, %d)", arg.Slots[0].Offset, arg.Slots[0].Width, 1)
+		scaled, ok := insn_scaled[mnemonic]
+		if ok {
+			return fmt.Sprintf("Sscaled(%d, %d, %d)", arg.Slots[0].Offset, arg.Slots[0].Width, scaled)
 		}
 		if len(arg.Slots) == 1 {
 			return fmt.Sprintf("SImm(%d, %d)", arg.Slots[0].Offset, arg.Slots[0].Width)
@@ -358,6 +562,26 @@ func argToProcessor(mnemonic string, idx int, arg *Arg) string {
 			}
 			return fmt.Sprintf("Ufields(&[%s])", strings.Join(parts, ", "))
 		}
+	case ArgKindOffsetSI20:
+		// 特殊处理分支指令
+		if mnemonic == "beq" || mnemonic == "bne" ||
+			mnemonic == "blt" || mnemonic == "bge" ||
+			mnemonic == "bltu" || mnemonic == "bgeu" ||
+			mnemonic == "jirl" {
+			return "Offset(B)"
+		} else if mnemonic == "b" || mnemonic == "bl" {
+			return "Offset(J)"
+		} else if mnemonic == "beqz" || mnemonic == "bnez" ||
+			mnemonic == "bceqz" || mnemonic == "bcnez" {
+			return "Offset(BZ)"
+		}
+		return "Offset(SI20)"
+	case ArgKindOffsetSI14:
+		return "Offset(SI14)"
+	case ArgKindOffsetSI12:
+		return "Offset(SI12)"
+	case ArgKindOffsetSI16:
+		return "Offset(SI16)"
 	default:
 		return "Unknown"
 	}

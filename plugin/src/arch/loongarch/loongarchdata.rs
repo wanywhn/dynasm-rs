@@ -183,6 +183,14 @@ pub enum Relocation {
     LITERAL32 = 6,
     // 64-bit literal
     LITERAL64 = 7,
+    // 20-bit offset,
+    SI20 = 8,
+    // 14-bit offset,
+    SI14 = 9,
+    // 16-bit offset,
+    SI16 = 10,
+    // 12-bit offset,
+    SI12 = 11,
 }
 
 impl Relocation {
@@ -194,7 +202,9 @@ impl Relocation {
         match self {
             Relocation::LITERAL8 => 1,
             Relocation::LITERAL16 => 2,
-            Relocation::B |Relocation::BZ| Relocation::J | Relocation::PC32 | Relocation::LITERAL32 => 4,
+            Relocation::B |Relocation::BZ| Relocation::J | Relocation::PC32 | 
+            Relocation::LITERAL32 | Relocation::SI20 | Relocation::SI14 | Relocation::SI16 |
+            Relocation::SI12 => 4,
             Relocation::LITERAL64 => 8,
         }
     }
