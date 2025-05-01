@@ -359,7 +359,7 @@ func processSpecialInstructions(descs []InsnDescription) []InsnDescription {
 
 	load_store_insn := map[string]ArgKind{
 		// "ld.b":  ArgKindOffsetSI12,
-		// "ld.d":  ArgKindOffsetSI12,
+		"ld.d": ArgKindOffsetSI12,
 		// "ld.h":  ArgKindOffsetSI12,
 		// "ld.w":  ArgKindOffsetSI12,
 		// "st.b":  ArgKindOffsetSI12,
