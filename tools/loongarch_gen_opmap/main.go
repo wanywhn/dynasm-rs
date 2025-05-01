@@ -10,6 +10,56 @@ import (
 	"github.com/loongson-community/loongarch-opcodes/scripts/go/common"
 )
 
+type InsnDescription struct {
+	Word       uint32
+	Mnemonic   string
+	Format     *InsnFormat
+	OrigFormat *InsnFormat
+	Attribs    map[string]string
+}
+
+type InsnFormat struct {
+	Args []*Arg
+}
+
+type Arg struct {
+	Kind  ArgKind
+	Slots []*Slot
+	Post  PostprocessOp
+}
+
+type Slot struct {
+	Offset uint
+	Width  uint
+}
+
+type PostprocessOp struct {
+	Kind   PostprocessOpKind
+	Amount int
+}
+
+type PostprocessOpKind int
+
+const (
+	PostprocessOpKindNone PostprocessOpKind = 0
+	PostprocessOpKindAdd  PostprocessOpKind = 1
+	PostprocessOpKindShl  PostprocessOpKind = 2
+)
+
+type ArgKind int
+
+const (
+	ArgKindUnknown     ArgKind = 0
+	ArgKindIntReg      ArgKind = 1
+	ArgKindFPReg       ArgKind = 2
+	ArgKindFCCReg      ArgKind = 3
+	ArgKindScratchReg  ArgKind = 4
+	ArgKindVReg        ArgKind = 5
+	ArgKindXReg        ArgKind = 6
+	ArgKindSignedImm   ArgKind = 7
+	ArgKindUnsignedImm ArgKind = 8
+)
+
 func main() {
 	if len(os.Args) < 3 {
 		fmt.Println("Usage: loongarch_gen_opmap <input-dir> <output-file>")
@@ -25,9 +75,21 @@ func main() {
 		panic(err)
 	}
 
-	descs, err := common.ReadInsnDescs(inputs)
+	commonDescs, err := common.ReadInsnDescs(inputs)
 	if err != nil {
 		panic(err)
+	}
+
+	// 转换 common.InsnDescription 到本地 InsnDescription
+	var descs []InsnDescription
+	for _, d := range commonDescs {
+		descs = append(descs, InsnDescription{
+			Word:       d.Word,
+			Mnemonic:   d.Mnemonic,
+			Format:     convertFormat(d.Format),
+			OrigFormat: convertFormat(d.OrigFormat),
+			Attribs:    d.Attribs,
+		})
 	}
 
 	// 2. 生成opmap.rs文件
@@ -38,7 +100,7 @@ func main() {
 }
 
 // generateOpmapFile 生成opmap.rs文件
-func generateOpmapFile(path string, insns []*common.InsnDescription) error {
+func generateOpmapFile(path string, insns []InsnDescription) error {
 	file, err := os.Create(path)
 	if err != nil {
 		return err
@@ -50,7 +112,7 @@ func generateOpmapFile(path string, insns []*common.InsnDescription) error {
 	file.WriteString("Ops!(\n\n")
 
 	// 按助记符分组
-	insnMap := make(map[string][]*common.InsnDescription)
+	insnMap := make(map[string][]InsnDescription)
 	for _, insn := range insns {
 		insnMap[insn.Mnemonic] = append(insnMap[insn.Mnemonic], insn)
 	}
@@ -128,30 +190,30 @@ func generateOpmapFile(path string, insns []*common.InsnDescription) error {
 }
 
 // argToRust 将操作数转换为Rust宏参数
-func argToRust(mnemonic string, idx int, arg *common.Arg) string {
+func argToRust(mnemonic string, idx int, arg *Arg) string {
 	if arg == nil {
 		return "Unknown"
 	}
 
 	switch arg.Kind {
-	case common.ArgKindIntReg:
+	case ArgKindIntReg:
 		if (mnemonic == "movfcsr2gr" || mnemonic == "movgr2fcsr") &&
 			idx == 1 {
 			return "FCSR"
 		} else {
 			return "R"
 		}
-	case common.ArgKindFPReg:
+	case ArgKindFPReg:
 		return "F"
-	case common.ArgKindFCCReg:
+	case ArgKindFCCReg:
 		return "C"
-	case common.ArgKindScratchReg:
+	case ArgKindScratchReg:
 		return "T"
-	case common.ArgKindVReg:
+	case ArgKindVReg:
 		return "V"
-	case common.ArgKindXReg:
+	case ArgKindXReg:
 		return "X"
-	case common.ArgKindSignedImm:
+	case ArgKindSignedImm:
 		// 特殊处理分支指令
 		if mnemonic == "beq" || mnemonic == "bne" || mnemonic == "blt" ||
 			mnemonic == "bge" || mnemonic == "bltu" || mnemonic == "bgeu" ||
@@ -161,7 +223,7 @@ func argToRust(mnemonic string, idx int, arg *common.Arg) string {
 			return "Offset"
 		}
 		return "Imm"
-	case common.ArgKindUnsignedImm:
+	case ArgKindUnsignedImm:
 		return "Imm"
 	default:
 		if len(arg.Slots) == 0 {
@@ -174,8 +236,44 @@ func argToRust(mnemonic string, idx int, arg *common.Arg) string {
 	}
 }
 
+// convertFormat 转换 common.InsnFormat 到本地 InsnFormat
+func convertFormat(f *common.InsnFormat) *InsnFormat {
+	if f == nil {
+		return nil
+	}
+	var args []*Arg
+	for _, a := range f.Args {
+		args = append(args, &Arg{
+			Kind:  ArgKind(a.Kind),
+			Slots: convertSlots(a.Slots),
+			Post:  convertPost(a.Post),
+		})
+	}
+	return &InsnFormat{Args: args}
+}
+
+// convertSlots 转换 common.Slot 到本地 Slot
+func convertSlots(slots []*common.Slot) []*Slot {
+	var result []*Slot
+	for _, s := range slots {
+		result = append(result, &Slot{
+			Offset: s.Offset,
+			Width:  s.Width,
+		})
+	}
+	return result
+}
+
+// convertPost 转换 common.PostprocessOp 到本地 PostprocessOp
+func convertPost(p common.PostprocessOp) PostprocessOp {
+	return PostprocessOp{
+		Kind:   PostprocessOpKind(p.Kind),
+		Amount: p.Amount,
+	}
+}
+
 // argToProcessor 将操作数转换为处理器表达式
-func argToProcessor(mnemonic string, idx int, arg *common.Arg) string {
+func argToProcessor(mnemonic string, idx int, arg *Arg) string {
 	if arg == nil {
 		return "Unknown"
 	}
@@ -184,24 +282,24 @@ func argToProcessor(mnemonic string, idx int, arg *common.Arg) string {
 	}
 
 	switch arg.Kind {
-	case common.ArgKindIntReg:
+	case ArgKindIntReg:
 		if (mnemonic == "movfcsr2gr" || mnemonic == "movgr2fcsr") &&
 			idx == 1 {
 			return fmt.Sprintf("FCSR(%d)", arg.Slots[0].Offset)
 		} else {
 			return fmt.Sprintf("R(%d)", arg.Slots[0].Offset)
 		}
-	case common.ArgKindFPReg:
+	case ArgKindFPReg:
 		return fmt.Sprintf("F(%d)", arg.Slots[0].Offset)
-	case common.ArgKindVReg:
+	case ArgKindVReg:
 		return fmt.Sprintf("V(%d)", arg.Slots[0].Offset)
-	case common.ArgKindXReg:
+	case ArgKindXReg:
 		return fmt.Sprintf("X(%d)", arg.Slots[0].Offset)
-	case common.ArgKindFCCReg:
+	case ArgKindFCCReg:
 		return fmt.Sprintf("C(%d)", arg.Slots[0].Offset)
-	case common.ArgKindScratchReg:
+	case ArgKindScratchReg:
 		return fmt.Sprintf("T(%d)", arg.Slots[0].Offset)
-	case common.ArgKindSignedImm:
+	case ArgKindSignedImm:
 		// 特殊处理分支指令
 		if mnemonic == "beq" || mnemonic == "bne" ||
 			mnemonic == "blt" || mnemonic == "bge" ||
@@ -241,7 +339,7 @@ func argToProcessor(mnemonic string, idx int, arg *common.Arg) string {
 			}
 			return fmt.Sprintf("Sfields(&[%s])", strings.Join(parts, ", "))
 		}
-	case common.ArgKindUnsignedImm:
+	case ArgKindUnsignedImm:
 
 		if mnemonic == "alsl.w" || mnemonic == "alsl.d" || mnemonic == "alsl.wu" {
 			return fmt.Sprintf("Usubone(%d, %d)", arg.Slots[0].Offset, arg.Slots[0].Width)
