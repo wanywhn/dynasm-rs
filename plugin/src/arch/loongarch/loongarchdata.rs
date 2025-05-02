@@ -175,22 +175,23 @@ pub enum Relocation {
     // PC-relative load/store
     // 32-bit offset
     PC32 = 3,
-    // 8-bit literal
-    LITERAL8 = 4,
-    // 16-bit literal
-    LITERAL16 = 5,
-    // 32-bit literal
-    LITERAL32 = 6,
-    // 64-bit literal
-    LITERAL64 = 7,
+
     // 20-bit offset, 2-bit aligned
-    SI20 = 8,
+    SI20 = 4,
     // 14-bit offset, 2-bit aligned
-    SI14 = 9,
+    SI14 = 5,
     // 16-bit offset,
-    SI16 = 10,
+    SI16 = 6,
     // 12-bit offset,
-    SI12 = 11,
+    SI12 = 7,
+    // 8-bit literal
+    LITERAL8 = 9,
+    // 16-bit literal
+    LITERAL16 = 10,
+    // 32-bit literal
+    LITERAL32 = 11,
+    // 64-bit literal
+    LITERAL64 = 12,
 }
 
 impl Relocation {

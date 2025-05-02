@@ -16,6 +16,10 @@ path = "src/aarch64.rs"
 name = "hello-world-riscv64"
 path = "src/riscv64.rs"
 
+[[bin]]
+name = "hello-world-loongarch64"
+path = "src/loongarch64.rs"
+
 [dependencies]
 
 [dependencies.dynasmrt]
