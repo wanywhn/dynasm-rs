@@ -111,6 +111,7 @@ fn format_constraints(data: &Opdata) -> String {
         match command {
             Command::R(_) => (),
             Command::Rno0(_) => constraints.push("rd cannot be r0".to_string()),
+            Command::Rdiff(_) => constraints.push("rd cannot eque previous ".to_string()),
             Command::UImm(start, end) => {
                                 // let s = format!("0 <= imm <= {}", (1u32 << (end.wrapping_sub(*start) as u8)) - 1);
                                 // constraints.push(s);
@@ -278,6 +279,7 @@ fn extract_constraints(data: &Opdata) -> Vec<String> {
     for command in data.commands {
         let constraint = match command {
             Command::R(_) => format!("R(0xFFFFFFFF)"),
+            Command::Rdiff(_) => format!("Rdiff(0xFFFFFFFF)"),
             Command::Rno0(_) => format!("R(0xFFFFFFFE)"),
             Command::UImm(start, len) => format!("Range(0, {}, {})", 1u32 << len, 1),
             Command::SImm(start, len) => format!("Range(-{}, {}, {})", 

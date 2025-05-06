@@ -118,6 +118,8 @@ pub enum Command {
     R(u8),
     /// A 5-bit register encoding that cannot be r0
     Rno0(u8),
+    /// A 5-bit register encoding that diff before
+    Rdiff(u8),
     /// A 5-bit floating point register encoding
     F(u8),
     /// A 3-bit floating point cond register encoding

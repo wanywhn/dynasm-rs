@@ -10,6 +10,17 @@ from pathlib import Path
 LOONGARCH_BLACKLIST = {
     # 已知不支持的指令
     'xxx.unknown',
+    "movgr2fcsr",
+    "movfcsr2gr",
+    "hvcl",
+    "gtlbwr",
+    "gtlbsrch",
+    "gtlbrd",
+    "gtlbflush",
+    "gtlbfill",
+    "gtlbclr",
+    "gcsrxchg",
+    "csrxchg",
 }
 
 def main():
@@ -43,6 +54,7 @@ def read_opdata_file(f):
         'Range2': Range2,
         'Range3': Range3,
         'R': R,
+        'Rdiff': Rdiff,
         'F': F,
         'V': V,
         'X': X,
@@ -70,7 +82,7 @@ def read_opdata_file(f):
         # Skip blacklisted instructions
         mnemonic = mnemonic_args.split(' ', 1)[0].strip('"')
         if any(blacklisted in mnemonic for blacklisted in LOONGARCH_BLACKLIST):
-            print(f"Skipping {mnemonic} (matches blacklist pattern)")
+            # print(f"Skipping {mnemonic} (matches blacklist pattern)")
             continue
 
         templates.append(OpTemplate(mnemonic_args, constraints))
@@ -173,6 +185,15 @@ class R(Constraint):
         self.valid_regs = [i for i in range(32) if (mask & (1 << i))]
         
     def create_value(self, history=None):
+        return random.choice(self.valid_regs)
+
+class Rdiff(R):
+    """A special reg constraint"""
+
+    def create_value(self, history):
+        for value in history.values:
+            if value in self.valid_regs:
+                self.valid_regs.remove(value)     
         return random.choice(self.valid_regs)
 
 class F(Constraint):

@@ -258,7 +258,7 @@ pub(super) fn compile_instruction(ctx: &mut Context, data: MatchData) -> Result<
                         }));
                     }
                 },
-                Command::Repeat |Command::Next | Command::R(_) |
+                Command::Repeat |Command::Next | Command::R(_) | Command::Rdiff(_) |
                 Command::Rno0(_) |Command::F(_) | Command::C(_) |
                 Command::T(_) | Command::V(_) | Command::X(_) | Command::FCSR(_) |
                 Command::Ufields(_) => panic!("Invalid argument processor, arg:{:?}, command:{:?}", arg, command),

@@ -515,8 +515,60 @@ func argToProcessor(mnemonic string, idx int, arg *Arg) string {
 		"bcnez": 2,
 	}
 
+	insn_range2 := map[string]int{
+		"amswap.b":    0x6,
+		"amswap.d":    0x6,
+		"amswap.w":    0x6,
+		"amswap.h":    0x6,
+		"amswap_db.b": 0x6,
+		"amswap_db.d": 0x6,
+		"amswap_db.w": 0x6,
+		"amswap_db.h": 0x6,
+		"amadd_db.b":  0x6,
+		"amadd_db.d":  0x6,
+		"amadd_db.h":  0x6,
+		"amadd_db.w":  0x6,
+		"amadd.b":     0x6,
+		"amadd.h":     0x6,
+		"amadd.w":     0x6,
+		"amadd.d":     0x6,
+
+		"ammax_db.d":  0x6,
+		"ammax_db.du": 0x6,
+		"ammax_db.w":  0x6,
+		"ammax_db.wu": 0x6,
+		"ammin_db.d":  0x6,
+		"ammin_db.du": 0x6,
+		"ammin_db.w":  0x6,
+		"ammin_db.wu": 0x6,
+		"amor_db.d":   0x6,
+		"amor_db.w":   0x6,
+
+		"amand.d":    0x6,
+		"ammax.w":    0x6,
+		"ammax.wu":   0x6,
+		"amxor.w":    0x6,
+		"amand.w":    0x6,
+		"ammin.w":    0x6,
+		"ammin.wu":   0x6,
+		"amxor.d":    0x6,
+		"amxor_db.d": 0x6,
+		"amxor_db.w": 0x6,
+		"amor.d":     0x6,
+		"ammax.d":    0x6,
+		"ammax.du":   0x6,
+		"amor.w":     0x6,
+		"ammin.d":    0x6,
+		"ammin.du":   0x6,
+		"amand_db.d": 0x6,
+		"amand_db.w": 0x6,
+	}
 	switch arg.Kind {
 	case ArgKindIntReg:
+		target_idx, ok := insn_range2[mnemonic]
+		if ok && (target_idx&(1<<idx) != 0) {
+			return fmt.Sprintf("Rdiff(%d)", arg.Slots[0].Offset)
+		}
 		if (mnemonic == "movfcsr2gr" || mnemonic == "movgr2fcsr") &&
 			idx == 1 {
 			return fmt.Sprintf("FCSR(%d)", arg.Slots[0].Offset)
