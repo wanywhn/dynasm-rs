@@ -17,6 +17,14 @@ LoongArch
 - First generate an opcode data dump using `cargo run --bin=export -- loongarch > loongarch_opmap_export.txt` from `../doc/insref`
 - Use `python3 loongarch_emit_tests.py loongarch_compiled_tests.txt ../testing/tests/gen_loongarch/` to generate the test suite
 
+cd ./tools/loongarch_gen_opmap; go build; cd -;
+./tools/loongarch_gen_opmap/loongarch_gen_opmap tools/loongarch_tools/loongarch_opcodes plugin/src/arch/loongarch/opmap.rs
+cargo run --features dynasm_extract --bin export -- loongarch64 > opmap_export_loongarch.txt
+python3 tools/loongarch_gen_tests.py opmap_export_loongarch.txt tools/loongarch_gen_tests_output.txt --attempts 3 
+python3 tools/loongarch_compile_tests.py tools/loongarch_gen_tests_output.txt tools/loongarch_compiled_tests.txt 
+python3 tools/loongarch_emit_tests.py tools/loongarch_compiled_tests.txt testing/tests/gen_loongarch 
+cargo test --no-fail-fast
+
 RISC-V
 ######
 
