@@ -16,6 +16,10 @@ path = "src/aarch64.rs"
 name = "bf-jit-riscv64"
 path = "src/riscv64.rs"
 
+[[bin]]
+name = "bf-jit-loongarch64"
+path = "src/loongarch64.rs"
+
 [dependencies]
 itertools = "0.14.0"
 
