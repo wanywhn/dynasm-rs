@@ -562,6 +562,10 @@ func argToProcessor(mnemonic string, idx int, arg *Arg) string {
 		"ammin.du":   0x6,
 		"amand_db.d": 0x6,
 		"amand_db.w": 0x6,
+
+		"amcas.b": 0x6,
+		"amcas.h": 0x6,
+		"amcas.w": 0x6,
 	}
 	switch arg.Kind {
 	case ArgKindIntReg:
