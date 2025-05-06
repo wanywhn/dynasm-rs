@@ -54,6 +54,7 @@ pub fn format_opdata_list(name: &str, data: &[Opdata], target: LoongArchTarget) 
     forms.join("\n")
 }
 
+
 pub fn format_opdata(name: &str, data: &Opdata) -> String {
     let mut buf = format!(">>> {}", name);
 
@@ -80,6 +81,7 @@ pub fn format_opdata(name: &str, data: &Opdata) -> String {
             Matcher::V => buf.push_str("lsx-reg"),
             Matcher::X => buf.push_str("lasx-reg"),
             Matcher::FCSR => buf.push_str("fcsr"),
+            Matcher::RefLabel => write!(buf, "RefLabel").unwrap(),
         }
     }
 
@@ -242,6 +244,7 @@ pub fn extract_opdata(name: &str, data: &Opdata) -> String {
                 Matcher::Reg(regid) => write!(buf, "{}", regid).unwrap(),
                 Matcher::Ref => write!(buf, "[<R,{}>]", arg_idx).unwrap(),
                 Matcher::RefOffset => write!(buf, "[<R,{}>, <Imm,{}>]", arg_idx, arg_idx + 1).unwrap(),
+                Matcher::RefLabel => write!(buf, "[<R,{}>, <Off,{}>]", arg_idx, arg_idx + 1).unwrap(),
                 Matcher::Imm => write!(buf, "<Imm,{}>", arg_idx).unwrap(),
                 Matcher::Offset => write!(buf, "<Off,{}>", arg_idx).unwrap(),
                 Matcher::Ident => write!(buf, "<Ident,{}>", arg_idx).unwrap(),
@@ -253,7 +256,8 @@ pub fn extract_opdata(name: &str, data: &Opdata) -> String {
             }
 
         arg_idx += match matcher {
-            Matcher::RefOffset => 2,
+            Matcher::RefOffset 
+            | Matcher::RefLabel => 2,
             Matcher::Reg(_) => 0,
             _ => 1
         };
