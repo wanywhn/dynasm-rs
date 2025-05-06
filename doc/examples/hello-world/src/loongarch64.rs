@@ -19,10 +19,16 @@ fn main() {
     let hello = ops.offset();
     dynasm!(ops
         ; .arch loongarch64
+        ; addi.d sp, sp, -16
+        ; st.d ra, sp, 0
         ; pcaddi a0, ->hello
         ; addi.d a1, zero, string.len() as i32
-        ; ld.d t0, zero, ->print
+        ; pcaddi t0, ->print
+        ; ldptr.d t0, t0, 0
+        // ; ld.d t0, zero, ->print
         ; jirl ra, t0, 0
+        ; ld.d ra, sp, 0
+        ; addi.d sp, sp, 16
         ; jirl zero, ra, 0
     );
 
