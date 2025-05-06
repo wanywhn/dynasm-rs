@@ -407,6 +407,13 @@ func processSpecialInstructions(descs []InsnDescription) []InsnDescription {
 		"bcnez":     ArgKindOffsetSI20,
 	}
 
+	tmp_descs := newFunction(descs, load_store_insn)
+
+	descs = append(descs, tmp_descs...)
+	return descs
+}
+
+func newFunction(descs []InsnDescription, load_store_insn map[string]ArgKind) []InsnDescription {
 	var tmp_descs []InsnDescription
 
 	for i := range descs {
@@ -439,9 +446,7 @@ func processSpecialInstructions(descs []InsnDescription) []InsnDescription {
 			}
 		}
 	}
-
-	descs = append(descs, tmp_descs...)
-	return descs
+	return tmp_descs
 }
 
 // argToProcessor 将操作数转换为处理器表达式
