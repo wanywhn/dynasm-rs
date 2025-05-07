@@ -29,7 +29,7 @@ macro_rules! prologue {
     ($ops:ident) => {{
         let start = $ops.offset();
         my_dynasm!($ops
-            ; addi.d sp, zero, -48
+            ; addi.d sp, sp, -48
             ; st.d ra, sp, 0
             ; st.d a0, sp, 8
             ; st.d a1, sp, 16
@@ -52,8 +52,8 @@ macro_rules! epilogue {
 macro_rules! call_extern {
     ($ops:ident, $addr:ident) => {my_dynasm!($ops
         ; st.d a1, sp, 16
-        ; pcaddi a0, 0
-        ; ld.d a0, a0, ->$addr
+        ; pcaddi a4, 0
+        ; ld.d a4, a4, ->$addr
         ; jirl ra, a4, 0
         ; add.d a4, zero, a0
         ; ld.d a0, sp, 8
@@ -98,11 +98,12 @@ impl Program {
                     let amount = code.take_while_ref(|x| *x == b'<').count() + 1;
                     my_dynasm!(ops
                         // TODO: add add_imm function
-                        ; lu12i.w a4, (amount % TAPE_SIZE) as u32 as i32 & 0xFFF
-                        ; ori a4, a4, ((amount % TAPE_SIZE) as u32 as i32 >> 12 )as u32
+                        ; lu12i.w a4, ((amount % TAPE_SIZE) as u32 as i32 >> 12) & 0xFFFFF
+                        ; ori a4, a4, ((amount % TAPE_SIZE) as u32 as i32 & 0xFFF )as u32
                         ; sub.d a_current, a_current, a4
                         ; bgeu a_current, a_begin, >nowrap
-                        ; addi.d a4, zero, TAPE_SIZE as u32 as i32
+                        ; lu12i.w a4, TAPE_SIZE as u32 as i32 & 0xFFF
+                        ; ori a4, a4, (TAPE_SIZE as u32 as i32 >> 12 )as u32
                         ; add.d a_current, a4, a_current
                         ; nowrap:
                     );
@@ -111,11 +112,12 @@ impl Program {
                     let amount = code.take_while_ref(|x| *x == b'>').count() + 1;
                     my_dynasm!(ops
                         // TODO: add add_imm function
-                        ; lu12i.w a4, (amount % TAPE_SIZE) as u32 as i32 & 0xFFF
-                        ; ori a4, a4, ((amount % TAPE_SIZE) as u32 as i32 >> 12 )as u32
+                        ; lu12i.w a4, ((amount % TAPE_SIZE) as u32 as i32 >> 12) & 0xFFFFF
+                        ; ori a4, a4, ((amount % TAPE_SIZE) as u32 as i32 & 0xFFF )as u32
                         ; sub.d a_current, a_current, a4
                         ; bltu a_current, a_end, >nowrap
-                        ; addi.d a4, zero, TAPE_SIZE as u32 as i32
+                        ; lu12i.w a4, (TAPE_SIZE as u32 as i32 >> 12) & 0xFFFFF
+                        ; ori a4, a4, (TAPE_SIZE as u32 as i32 & 0xFFF )as u32
                         ; sub.d a_current, a_current, a4
                         ; nowrap:
                     );
@@ -160,7 +162,9 @@ impl Program {
                 b'.' => {
                     my_dynasm!(ops
                         ;; call_extern!(ops, putchar)
-                        ; bnez a4, ->io_failure
+                        ; beqz a4, >fine
+                        ;  b ->io_failure
+                        ; fine:
                     );
                 },
                 b'[' => {
