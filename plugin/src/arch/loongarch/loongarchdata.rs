@@ -5,6 +5,18 @@ use std::collections::{HashMap, hash_map};
 use super::ast::RegId;
 use std::fmt;
 
+/// A template contains the information for the static parts of an instruction encoding, as well
+/// as its bitsize and length
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Template {
+    /// A single 32-bit instruction
+    Single(u32),
+    // Two 32-bit instructions. Used for load/store reg, offset
+    Double(u32, u32),
+    // / A long instruction sequence. Used to load big immediates.
+    Many(&'static [u32])
+}
+
 
 bitflags! {
     /// Flags indicating what ISA targets an instruction is valid on
@@ -219,7 +231,7 @@ impl Relocation {
 #[derive(Debug, Clone, Copy)]
 pub struct Opdata {
     /// The base template for the encoding
-    pub template: u32,
+    pub template: Template,
     /// What ISA targets this op is valid for
     pub isa_flags: ISAFlags,
     /// What extensions are required for this instruction
@@ -298,6 +310,8 @@ macro_rules! SingleOp {
                     $command
                 ),* ]
             };
+
+            use self::Template::*;
             Opdata {
                 isa_flags: ISAFlags::make(0),
                 ext_flags: &[ExtensionFlags::Ex_BASE],
@@ -310,7 +324,7 @@ macro_rules! SingleOp {
 }
 
 macro_rules! Ops {
-    ( $( $name:tt = [ $( $base:tt = [ $( $matcher:expr ),* ] => [ $( $command:expr ),* ] ; )+ ] )* ) => {
+    ( $( $name:tt = [ $( $base:expr , [ $( $matcher:expr ),* ] => [ $( $command:expr ),* ] ; )+ ] )* ) => {
         [ $(
             (
                 $name,

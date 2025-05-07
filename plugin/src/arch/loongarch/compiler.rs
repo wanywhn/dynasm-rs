@@ -1,6 +1,6 @@
 
 use super::Context;
-use super::loongarchdata::{Command, Relocation};
+use super::loongarchdata::{Command, Relocation, Template};
 use super::ast::{MatchData, FlatArg, Register};
 
 use syn::spanned::Spanned;
@@ -286,26 +286,76 @@ pub(super) fn compile_instruction(ctx: &mut Context, data: MatchData) -> Result<
         panic!("Not enough command processors");
     }
 
-    // apply all statics to bits
-    let mut bits = data.data.template;
+    let mut templates = [0u32; 8];
+    let mut exprs = [None, None, None, None, None, None, None, None];
+
+    // for convenience sake we operate in 32 bits width, even for compressed instructions
+    match data.data.template {
+        Template::Single(val) => templates[0] = val,
+        Template::Double(val1, val2) => {
+            templates[0] = val1;
+            templates[1] = val2;
+        },
+        Template::Many(values) => {
+            templates[ .. values.len()].copy_from_slice(values);
+        }
+    };
+
+    // apply all statics to templates
     for (offset, value) in statics {
-        bits |= value << offset;
+        templates[(offset >> 5) as usize] |= value << (offset & 0x1F);
     }
 
-    // generate code to be emitted for dynamics
-    if !dynamics.is_empty() {
-        let mut res = quote!{
-            #bits
-        };
-        for (offset, expr) in dynamics {
-            res = quote!{
-                #res | ((#expr) << #offset)
-            };
+    // and process all dynamics
+    for (offset, expr) in dynamics {
+        let index = usize::from(offset >> 5);
+        let offset = offset & 0x1F;
+
+        exprs[index] = match exprs[index].take() {
+            Some(prev_expr) => {
+                Some(if offset == 0 {
+                    quote!{ #prev_expr | #expr }
+                } else {
+                    quote!{ #prev_expr | (#expr << #offset) }
+                })
+            },
+            None => {
+                let bits = templates[index];
+                Some(if offset == 0 {
+                    quote!{ #bits | #expr }
+                } else {
+                    quote!{ #bits | (#expr << #offset) }
+                })
+            }
         }
-        ctx.state.stmts.push(Stmt::ExprUnsigned(delimited(res), Size::B_4));
-    } else {
-        ctx.state.stmts.push(Stmt::Const(u64::from(bits), Size::B_4));
     }
+
+    match data.data.template {
+        Template::Single(_) => if let Some(d) = exprs[0].take() {
+            ctx.state.stmts.push(Stmt::ExprUnsigned(delimited(d), Size::B_4));
+        } else {
+            ctx.state.stmts.push(Stmt::Const(u64::from(templates[0]), Size::B_4));
+        },
+        Template::Double(_, _) => {
+            for i in 0 .. 2 {
+                if let Some(d) = exprs[i].take() {
+                    ctx.state.stmts.push(Stmt::ExprUnsigned(delimited(d), Size::B_4));
+                } else {
+                    ctx.state.stmts.push(Stmt::Const(u64::from(templates[i]), Size::B_4));
+                }
+            }
+        },
+        Template::Many(c) => {
+            for i in 0 .. c.len() {
+                if let Some(d) = exprs[i].take() {
+                    ctx.state.stmts.push(Stmt::ExprUnsigned(delimited(d), Size::B_4));
+                } else {
+                    ctx.state.stmts.push(Stmt::Const(u64::from(templates[i]), Size::B_4));
+                }
+            }
+        }
+    }
+    
     ctx.state.stmts.extend(relocations);
 
     Ok(())

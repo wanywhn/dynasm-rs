@@ -187,7 +187,7 @@ func generateOpmapFile(path string, insns []InsnDescription) error {
 				procList = append(procList, argToProcessor(mnemonic, idx, arg))
 			}
 
-			file.WriteString(fmt.Sprintf("    %s = [%s] => [%s];\n",
+			file.WriteString(fmt.Sprintf("    Single(%s) , [%s] => [%s];\n",
 				formattedBits, strings.Join(argList, ", "), strings.Join(procList, ", ")))
 		}
 
