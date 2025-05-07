@@ -64,6 +64,7 @@ const (
 	ArgKindOffsetSI14  ArgKind = 12
 	ArgKindOffsetSI12  ArgKind = 13
 	ArgKindOffsetSI16  ArgKind = 14
+	ArgKindOffsetSI26  ArgKind = 15
 )
 
 func main() {
@@ -224,7 +225,7 @@ func argToRust(mnemonic string, idx int, arg *Arg) string {
 		return "X"
 	case ArgKindSignedImm, ArgKindUnsignedImm:
 		return "Imm"
-	case ArgKindOffsetSI20, ArgKindOffsetSI12, ArgKindOffsetSI14, ArgKindOffsetSI16:
+	case ArgKindOffsetSI20, ArgKindOffsetSI12, ArgKindOffsetSI14, ArgKindOffsetSI16, ArgKindOffsetSI26:
 		return "Offset"
 
 	default:
@@ -392,17 +393,17 @@ func processSpecialInstructions(descs []InsnDescription) []InsnDescription {
 		"pcaddu12i": ArgKindOffsetSI20,
 		"pcaddu18i": ArgKindOffsetSI20,
 		"pcalau12i": ArgKindOffsetSI20,
-		"beq":       ArgKindOffsetSI20,
-		"bne":       ArgKindOffsetSI20,
-		"blt":       ArgKindOffsetSI20,
-		"bge":       ArgKindOffsetSI20,
-		"bltu":      ArgKindOffsetSI20,
-		"bgeu":      ArgKindOffsetSI20,
+		"beq":       ArgKindOffsetSI16,
+		"bne":       ArgKindOffsetSI16,
+		"blt":       ArgKindOffsetSI16,
+		"bge":       ArgKindOffsetSI16,
+		"bltu":      ArgKindOffsetSI16,
+		"bgeu":      ArgKindOffsetSI16,
 		"beqz":      ArgKindOffsetSI20,
 		"bnez":      ArgKindOffsetSI20,
-		"b":         ArgKindOffsetSI20,
-		"bl":        ArgKindOffsetSI20,
-		"jirl":      ArgKindOffsetSI20,
+		"b":         ArgKindOffsetSI26,
+		"bl":        ArgKindOffsetSI26,
+		"jirl":      ArgKindOffsetSI16,
 		"bceqz":     ArgKindOffsetSI20,
 		"bcnez":     ArgKindOffsetSI20,
 	}
@@ -642,6 +643,8 @@ func argToProcessor(mnemonic string, idx int, arg *Arg) string {
 		return "Offset(SI12)"
 	case ArgKindOffsetSI16:
 		return "Offset(SI16)"
+	case ArgKindOffsetSI26:
+		return "Offset(J)"
 	default:
 		return "Unknown"
 	}
