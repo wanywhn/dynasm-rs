@@ -383,13 +383,15 @@ fn fun_name(statics: &mut Vec<(u8, u32)>, dynamics: &mut Vec<(u8, TokenStream)>,
 
     } else {
         let check = dynamic_range_check_signed(value.span(), half, mask, scale);
-
+        let mut consumed_len = 0;
+        println!("{:#?}, {:#?}", value, arr);
         for w in arr.windows(2).step_by(2) {
             let offset = w[0];
             let len = w[1];
             let par_ask = bitmask(len);
+            consumed_len += len;
             dynamics.push((offset, quote_spanned!{ value.span()=>
-                {let _dyn_imm: i32 = #value; #check; ((value >> (#bitlen - #len)) as u32) & #par_ask }
+                {let _dyn_imm: i32 = #value; #check; ((value >> (#bitlen - #consumed_len)) as u32) & #par_ask }
             }));
         }
     })

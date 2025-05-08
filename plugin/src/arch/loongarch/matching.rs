@@ -16,18 +16,20 @@ pub(super) fn match_instruction(ctx: &mut Context, mut instruction: ParsedInstru
 
     let opdata = get_mnemonic_data(&instruction.name).ok_or_else(|| Some(format!("Unknown instruction mnemonic '{}'", instruction.name)))?;
     // FIXME
-    // if instruction.name == "ld.d" {
+    // if instruction.name == "b" {
         // println!("instructions.args: {:#?}", instruction.args);
     // }
 
     // Iterate through the supported instruction formats
     for data in opdata {
         // FIXME: This is a temporary workaround to make sure that we don't crash when trying to match instructions 
-        // if instruction.name == "ld.d" {
+        // if instruction.name == "b" {
             // println!("opdata: {:#?}", data);
         // }
         if let Some(mut match_data) = match_args(&instruction.args, data) {
-            // println!("match_data: {:#?}", match_data);
+            // if instruction.name == "b" {
+                // println!("match_data: {:#?}", match_data);
+            // }
             flatten_args(instruction.args, &mut match_data);
             return Ok(match_data)
         }

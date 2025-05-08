@@ -52,7 +52,7 @@ macro_rules! epilogue {
 macro_rules! call_extern {
     ($ops:ident, $addr:ident) => {my_dynasm!($ops
         ; st.d a1, sp, 16
-        ; pcaddi a4, 0
+        ; pcaddi a4, 1
         ; ld.d a4, a4, ->$addr
         ; jirl ra, a4, 0
         ; add.d a4, zero, a0
@@ -102,9 +102,9 @@ impl Program {
                         ; ori a4, a4, ((amount % TAPE_SIZE) as u32 as i32 & 0xFFF )as u32
                         ; sub.d a_current, a_current, a4
                         ; bgeu a_current, a_begin, >nowrap
-                        ; lu12i.w a4, TAPE_SIZE as u32 as i32 & 0xFFF
-                        ; ori a4, a4, (TAPE_SIZE as u32 as i32 >> 12 )as u32
-                        ; add.d a_current, a4, a_current
+                        ; lu12i.w a4, (TAPE_SIZE as u32 as i32 >> 12) & 0xFFFFF
+                        ; ori a4, a4, (TAPE_SIZE as u32 as i32 & 0xFFF )as u32
+                        ; add.d a_current, a_current, a4
                         ; nowrap:
                     );
                 },
@@ -114,7 +114,7 @@ impl Program {
                         // TODO: add add_imm function
                         ; lu12i.w a4, ((amount % TAPE_SIZE) as u32 as i32 >> 12) & 0xFFFFF
                         ; ori a4, a4, ((amount % TAPE_SIZE) as u32 as i32 & 0xFFF )as u32
-                        ; sub.d a_current, a_current, a4
+                        ; add.d a_current, a_current, a4
                         ; bltu a_current, a_end, >nowrap
                         ; lu12i.w a4, (TAPE_SIZE as u32 as i32 >> 12) & 0xFFFFF
                         ; ori a4, a4, (TAPE_SIZE as u32 as i32 & 0xFFF )as u32

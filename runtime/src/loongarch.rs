@@ -27,7 +27,7 @@ pub enum LoongArchRelocation {
     SI20,
     // 14-bit offset, 2-bit aligned
     SI14,
-    // 16-bit offset,
+    // 16-bit offset, 2-bit aligned
     SI16,
     // 12-bit offset,
     SI12,
@@ -37,9 +37,9 @@ pub enum LoongArchRelocation {
 impl LoongArchRelocation {
     fn op_mask(&self) -> u32 {
         match self {
-            Self::B => 0xFC00_0000,
-            Self::BZ => 0xFC00_03FF,
-            Self::J => 0xFC00_03FF,
+            Self::B => 0xFC00_03FF,
+            Self::BZ => 0xFC00_03E0,
+            Self::J => 0xFC00_0000,
             Self::PC32 => panic!("unimplemented"),
             Self::SI20 => 0xFE00_001F,
             Self::SI14 => 0xFF00_03FF,
@@ -70,7 +70,7 @@ impl LoongArchRelocation {
                     return Err(ImpossibleRelocation { } );
                 }
                 let value = (value >> 2) as u32;
-                ((value & 0xFFFF) << 10) | ((value >> 16) & 0x1F)
+                ((value & 0xFFFF) << 10) | ((value >> 16) & 0x3FF)
             },
             Self::SI20 => {
                 if value & 3 != 0 || !fits_signed_bitfield(value >> 2, 20) {
@@ -88,9 +88,10 @@ impl LoongArchRelocation {
                 (value & 0x3FFF) << 10
             },
             Self::SI16 => {
-                if !fits_signed_bitfield(value, 16) {
+                if value & 3 != 0 || !fits_signed_bitfield(value >> 2, 16) {
                     return Err(ImpossibleRelocation { } );
                 }
+                let value = (value >> 2) as u32;
                 (value as u32 & 0xFFFF) << 10
             },
             Self::SI12 => {
@@ -114,10 +115,10 @@ impl Relocation for LoongArchRelocation {
         2 => Self::J,
         3 => Self::PC32,
         4 => Self::SI20,
-        5 => Self::SI20,
-        6 => Self::SI14,
-        7 => Self::SI16,
-        8 => Self::SI12,
+        5 => Self::SI14,
+        6 => Self::SI16,
+        7 => Self::SI12,
+        8 => panic!("unimplemented"),
         x => Self::Plain(RelocationSize::from_encoding(x-8))
         }
     }
@@ -150,7 +151,7 @@ impl Relocation for LoongArchRelocation {
         let value = LittleEndian::read_u32(buf);
         let unpacked = match self {
             Self::B => u64::from(
-                (value & mask) >> 16
+                (value & mask) >> 10
             ) << 2,
             Self::BZ => {
                 let value = value & mask;
@@ -164,10 +165,10 @@ impl Relocation for LoongArchRelocation {
             },
             Self::SI20 => u64::from(
                 (value & mask) >> 5
-            ) << 2,
+            ) << 1,
             Self::SI14 => u64::from(
                 (value & mask) >> 10
-            ) << 2,
+            ) << 1,
             Self::SI16 => u64::from(
                 (value & mask) >> 10
             ),
@@ -180,11 +181,11 @@ impl Relocation for LoongArchRelocation {
 
         // Sign extend.
         let bits = match self {
-            Self::B => 18,
-            Self::BZ => 23,
-            Self::J => 28,
-            Self::SI20 => 22,
-            Self::SI14 => 16,
+            Self::B => 16,
+            Self::BZ => 21,
+            Self::J => 26,
+            Self::SI20 => 20,
+            Self::SI14 => 14,
             Self::SI16 => 16,
             Self::SI12 => 12,
             Self::PC32 => unreachable!(),
