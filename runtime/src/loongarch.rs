@@ -23,7 +23,7 @@ pub enum LoongArchRelocation {
     // 32-bit offset
     PC32,
 
-    // 20-bit offset, 2-bit aligned
+    // 20-bit offset
     SI20,
     // 14-bit offset, 2-bit aligned
     SI14,
@@ -73,12 +73,10 @@ impl LoongArchRelocation {
                 ((value & 0xFFFF) << 10) | ((value >> 16) & 0x3FF)
             },
             Self::SI20 => {
-                if value & 3 != 0 || !fits_signed_bitfield(value >> 2, 20) {
+                if !fits_signed_bitfield(value, 20) {
                     return Err(ImpossibleRelocation { } );
                 }
-                let value = (value >> 2) as u32;
-                (value & 0xF_FFFF) << 5
-
+                (value as u32 & 0xF_FFFF) << 5
             },
             Self::SI14 => {
                 if value & 3 != 0 || !fits_signed_bitfield(value >> 2, 14) {
@@ -165,7 +163,7 @@ impl Relocation for LoongArchRelocation {
             },
             Self::SI20 => u64::from(
                 (value & mask) >> 5
-            ) << 1,
+            ),
             Self::SI14 => u64::from(
                 (value & mask) >> 10
             ) << 1,

@@ -193,7 +193,7 @@ pub enum Relocation {
     // 32-bit offset
     PC32 = 3,
 
-    // 20-bit offset, 2-bit aligned
+    // 20-bit offset
     SI20 = 4,
     // 14-bit offset, 2-bit aligned
     SI14 = 5,
