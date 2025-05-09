@@ -63,6 +63,116 @@ macro_rules! call_extern {
     );};
 }
 
+#[macro_export]
+#[doc(hidden)]
+macro_rules! add_imm {
+    ($ops:ident, $rd:expr, $rs:expr, $imm:expr, $rt:expr) => {{
+        // 处理12位有符号数范围 (-2048 到 2047)
+        if $imm >= -2048 && $imm <= 2047 {
+            my_dynasm!($ops
+                ; addi.d $rd, $rs, ($imm as i64).try_into().unwrap()
+            );
+        }
+        // 处理16位有符号数且可以被16整除的情况
+        else if ($imm >= -(1 << 15) && $imm < (1 << 15)) && ($imm & 0xFFFF == 0) {
+            let si16 = ($imm >> 16) as i16;
+            my_dynasm!($ops
+                ; addu16i.d $rd, $rs, si16 as i32
+            );
+        }
+        // 处理20位有符号数范围
+        else if $imm >= -(1 << 19) && $imm < (1 << 19) {
+            let si20 = ($imm >> 12) as i32;
+            let low12 = ($imm & 0xFFF) as u32;
+            my_dynasm!($ops
+                ; lu12i.w $rt, si20
+                ; ori $rt, $rt, low12
+                ; add.d $rd, $rs, $rt
+            );
+        }
+        // 处理32位数
+        else if $imm >= -(1i64 << 31) && $imm < (1i64 << 31) {
+            let low12 = ($imm & 0xFFF) as u32;
+            let mid20 = (($imm >> 12) & 0xFFFFF) as i32;
+            my_dynasm!($ops
+                ; lu12i.w $rt, mid20
+                ; ori $rt, $rt, low12
+                ; add.d $rd, $rs, $rt
+            );
+        }
+        // 处理52位数
+        else {
+            let high20 = (($imm >> 32) & 0xFFFFF) as i32;
+            let mid20 = (($imm >> 12) & 0xFFFFF) as i32;
+            let low12 = ($imm & 0xFFF) as i32;
+            let top12 = (($imm >> 52) & 0xFFF) as i32;
+            my_dynasm!($ops
+                ; lu12i.w $rt, high20
+                ; ori $rt, $rt, low12 as u32
+                ; lu32i.d $rt, mid20
+                ; lu52i.d $rt, $rt, top12
+                ; add.d $rd, $rs, $rt
+            );
+        }
+    }};
+}
+
+#[macro_export]
+#[doc(hidden)]
+macro_rules! sub_imm {
+    ($ops:ident, $rd:expr, $rs:expr, $imm:expr, $rt:expr) => {{
+        add_imm!($ops, $rd, $rs, - (($imm) as i64), $rt)
+    }};
+}
+
+#[cfg(test)]
+mod tests {
+    use dynasmrt::{dynasm, DynasmApi};
+    use dynasmrt::loongarch::Assembler;
+
+    #[test]
+    fn test_add_imm() {
+        let mut ops = Assembler::new().unwrap();
+        
+        // 测试12位范围内的数
+        add_imm!(ops, a0, t0, 2047, t1);
+        add_imm!(ops, a0, t0, -2048, t1);
+        
+        // 测试16位且可左移16位的数
+        add_imm!(ops, a0, t0, 0x10000, t1);
+        
+        // 测试20位数
+        add_imm!(ops, a0, t0, 0x7FFFF, t1);
+        
+        // 测试32位数
+        add_imm!(ops, a0, t0, 0x7FFFFFFF, t1);
+        
+        // 测试52位数
+        add_imm!(ops, a0, t0, 0xFFFFFFFFFFFFFi64, t1);
+    }
+
+    #[test]
+    fn test_sub_imm() {
+        let mut ops = Assembler::new().unwrap();
+        
+        // 测试12位范围内的数
+        sub_imm!(ops, a0, t0, 2047, t1);
+        sub_imm!(ops, a0, t0, -2048, t1);
+        
+        // 测试16位且可左移16位的数
+        sub_imm!(ops, a0, t0, 0x10000, t1);
+        
+        // 测试20位数
+        sub_imm!(ops, a0, t0, 0x7FFFF, t1);
+        
+        // 测试32位数
+        sub_imm!(ops, a0, t0, 0x7FFFFFFF, t1);
+        
+        // 测试52位数
+        sub_imm!(ops, a0, t0, 0xFFFFFFFFFFFFFi64, t1);
+    }
+}
+
 struct State<'a> {
     pub input: Box<dyn BufRead + 'a>,
     pub output: Box<dyn Write + 'a>,
@@ -96,29 +206,23 @@ impl Program {
             match c {
                 b'<' => {
                     let amount = code.take_while_ref(|x| *x == b'<').count() + 1;
+                    sub_imm!(ops, a_current, a_current, (amount % TAPE_SIZE) as i64, a4);
                     my_dynasm!(ops
-                        // TODO: add add_imm function
-                        ; lu12i.w a4, ((amount % TAPE_SIZE) as u32 as i32 >> 12) & 0xFFFFF
-                        ; ori a4, a4, ((amount % TAPE_SIZE) as u32 as i32 & 0xFFF )as u32
-                        ; sub.d a_current, a_current, a4
                         ; bgeu a_current, a_begin, >nowrap
-                        ; lu12i.w a4, (TAPE_SIZE as u32 as i32 >> 12) & 0xFFFFF
-                        ; ori a4, a4, (TAPE_SIZE as u32 as i32 & 0xFFF )as u32
-                        ; add.d a_current, a_current, a4
+                    );
+                    add_imm!(ops, a_current, a_current, TAPE_SIZE as i64, a4);
+                    my_dynasm!(ops
                         ; nowrap:
                     );
                 },
                 b'>' => {
                     let amount = code.take_while_ref(|x| *x == b'>').count() + 1;
+                    add_imm!(ops, a_current, a_current, (amount % TAPE_SIZE) as i64, a4);
                     my_dynasm!(ops
-                        // TODO: add add_imm function
-                        ; lu12i.w a4, ((amount % TAPE_SIZE) as u32 as i32 >> 12) & 0xFFFFF
-                        ; ori a4, a4, ((amount % TAPE_SIZE) as u32 as i32 & 0xFFF )as u32
-                        ; add.d a_current, a_current, a4
                         ; bltu a_current, a_end, >nowrap
-                        ; lu12i.w a4, (TAPE_SIZE as u32 as i32 >> 12) & 0xFFFFF
-                        ; ori a4, a4, (TAPE_SIZE as u32 as i32 & 0xFFF )as u32
-                        ; sub.d a_current, a_current, a4
+                    );
+                    sub_imm!(ops, a_current, a_current, TAPE_SIZE as i64, a4);
+                    my_dynasm!(ops
                         ; nowrap:
                     );
                 },
@@ -278,7 +382,7 @@ fn main() {
 
     let mut buf = Vec::new();
     if let Err(_) = f.read_to_end(&mut buf) {
-        println!("Failed to read from file");
+        println!("Failed t0 read from file");
         return;
     }
 

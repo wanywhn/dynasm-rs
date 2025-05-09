@@ -113,18 +113,21 @@ pub(super) fn compile_instruction(ctx: &mut Context, data: MatchData) -> Result<
                                 fun_name(&mut statics, &mut dynamics, value, arr, 0)?;
                             },
                 Command::SImm(offset, bitlen) => {
+                    // let arr = [offset, bitlen];
+                    // fun_name(&mut statics, &mut dynamics, value, &arr, 0)?;
                                 let mask = bitmask(bitlen);
                                 let half = -1i32 << (bitlen - 1);
                                 let span = value.span();
-
                                 if let Some((_, scaled)) = static_range_check(value, half, mask, 0, span)? {
                                     statics.push((offset, scaled & mask));
 
                                 } else {
-                                    let check = dynamic_range_check_signed(value.span(), half, mask, 0);
+                                    println!("dynamic: mask:{:#?}, half:{:#?}, value:{:#?}", mask, half, value);
 
+                                    // let check = dynamic_range_check_signed(value.span(), half, mask, 0);
+                                    // #check; 
                                     dynamics.push((offset, quote_spanned!{ value.span()=>
-                                        { let _dyn_imm: i32 = #value; #check; (_dyn_imm as u32) & #mask }
+                                        { let _dyn_imm: i32 = #value; (_dyn_imm as u32) & #mask }
                                     }));
                                 }
                             },
@@ -608,5 +611,5 @@ fn dynamic_range_check_signed(span: Span, bias: i32, range: u32, scale: u8) -> T
         }
     };
 
-    quote_spanned!{ span => if #check { ::dynasmrt::aarch64::immediate_out_of_range_signed_32(_dyn_imm); }}
+    quote_spanned!{ span => if #check { ::dynasmrt::riscv::immediate_out_of_range_signed_32(_dyn_imm); }}
 }
