@@ -76,7 +76,7 @@ impl LoongArchRelocation {
                 if !fits_signed_bitfield(value, 20) {
                     return Err(ImpossibleRelocation { } );
                 }
-                (value as u32 & 0xF_FFFF) << 5
+                ((value >> 2) as u32  & 0xF_FFFF) << 5
             },
             Self::SI14 => {
                 if value & 3 != 0 || !fits_signed_bitfield(value >> 2, 14) {
