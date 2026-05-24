@@ -14,10 +14,10 @@ LoongArch
 
 ### Basic opmap generation
 
-- First build and run tools/loongarch_gen_opmap to generate opmap from tools/loongarch_tools/loongarch_opcodes :
+- First build and run tools/loongarch_gen_opmap to generate opmap from tools/loongarch_data/loongarch_opcodes :
 ```
 cd ./tools/loongarch_gen_opmap; go build; cd -;
-./tools/loongarch_gen_opmap/loongarch_gen_opmap tools/loongarch_tools/loongarch_opcodes plugin/src/arch/loongarch/opmap.rs
+./tools/loongarch_gen_opmap/loongarch_gen_opmap tools/loongarch_data/loongarch_opcodes plugin/src/arch/loongarch/opmap.rs
 ```
 
 ### Test suite generation
