@@ -11,6 +11,7 @@ pub mod debug;
 use crate::State;
 use crate::arch::{Stmt, Jump, Size};
 use crate::arch::Arch;
+use loongarchdata::Relocation;
 
 #[cfg(feature = "dynasm_opmap")]
 pub use debug::create_opmap;
@@ -130,9 +131,21 @@ fn compile_instruction_inner(ctx: &mut Context, input: parse::ParseStream) -> pa
 }
 
 fn handle_static_reloc_inner(stmts: &mut Vec<Stmt>, reloc: Jump, size: Size) {
-    // TODO: Define proper LoongArch relocations
+    let span = reloc.span();
+
+    let relocation = match size {
+        Size::BYTE => Relocation::LITERAL8,
+        Size::B_2 => Relocation::LITERAL16,
+        Size::B_4 => Relocation::LITERAL32,
+        Size::B_8 => Relocation::LITERAL64,
+        _ => {
+            emit_error!(span, "Relocation of unsupported size for the current target architecture");
+            return;
+        }
+    };
+
     stmts.push(Stmt::Const(0, size));
-    stmts.push(reloc.encode(size.in_bytes(), size.in_bytes(), &[]));
+    stmts.push(reloc.encode(size.in_bytes(), size.in_bytes(), &[relocation.to_id()]));
 }
 
 fn parse_features(_features: &[syn::Ident]) -> loongarchdata::ExtensionFlags {

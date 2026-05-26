@@ -40,7 +40,9 @@ impl LoongArchRelocation {
             Self::B => 0xFC00_03FF,
             Self::BZ => 0xFC00_03E0,
             Self::J => 0xFC00_0000,
-            Self::PC32 => panic!("unimplemented"),
+            // PC32 is a plain 32-bit value — mask=0 means the entire
+            // instruction word is overwritten by encode().
+            Self::PC32 => 0,
             Self::SI20 => 0xFE00_001F,
             Self::SI14 => 0xFF00_03FF,
             Self::SI16 => 0xFC00_03FF,
@@ -98,7 +100,14 @@ impl LoongArchRelocation {
                 }
                 (value as u32 & 0xFFF) << 10
             },
-            Self::PC32 => panic!("unimplemented"),
+            // PC32 is a raw 32-bit signed offset (no alignment requirement).
+            // Used for PC-relative load/store placeholder values.
+            Self::PC32 => {
+                if !fits_signed_bitfield(value, 32) {
+                    return Err(ImpossibleRelocation { } );
+                }
+                value as u32
+            },
             Self::Plain(_) => return Err(ImpossibleRelocation { } )
         })
     }
@@ -173,7 +182,8 @@ impl Relocation for LoongArchRelocation {
             Self::SI12 => u64::from(
                 (value & mask) >> 10
             ),
-            Self::PC32 => panic!("unimplemented"),
+            // PC32 is a raw 32-bit value — just read it directly.
+            Self::PC32 => u64::from(value),
             Self::Plain(_) => unreachable!()
         };
 
