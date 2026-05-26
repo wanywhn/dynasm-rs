@@ -91,26 +91,43 @@ macro_rules! add_imm {
             );
         }
         // 处理32位数
+        // lu12i.w: SImm(5,20) 有符号20位，范围[-524288, 524287]
+        // 需将 (imm>>12)&0xFFFFF 从无符号20位符号扩展为i32
         else if $imm >= -(1i64 << 31) && $imm < (1i64 << 31) {
             let low12 = ($imm & 0xFFF) as u32;
-            let mid20 = (($imm >> 12) & 0xFFFFF) as i32;
+            let si20 = {
+                let raw = (($imm >> 12) & 0xFFFFF) as u32;
+                if raw & 0x80000 != 0 { (raw as i32) - 0x100000 } else { raw as i32 }
+            };
             my_dynasm!($ops
-                ; lu12i.w $rt, mid20
+                ; lu12i.w $rt, si20
                 ; ori $rt, $rt, low12
                 ; add.d $rd, $rs, $rt
             );
         }
         // 处理52位数
+        // lu12i.w/lu32i.d: SImm(5,20) 需符号扩展
+        // lu52i.d: SImm(52,12) 有符号12位，范围[-2048, 2047]
+        // 需将各字段从无符号截取值符号扩展为有符号i32
         else {
-            let high20 = (($imm >> 32) & 0xFFFFF) as i32;
-            let mid20 = (($imm >> 12) & 0xFFFFF) as i32;
-            let low12 = ($imm & 0xFFF) as i32;
-            let top12 = (($imm >> 52) & 0xFFF) as i32;
+            let low12 = ($imm & 0xFFF) as u32;
+            let si20_low = {
+                let raw = (($imm >> 12) & 0xFFFFF) as u32;
+                if raw & 0x80000 != 0 { (raw as i32) - 0x100000 } else { raw as i32 }
+            };
+            let si20_high = {
+                let raw = (($imm >> 32) & 0xFFFFF) as u32;
+                if raw & 0x80000 != 0 { (raw as i32) - 0x100000 } else { raw as i32 }
+            };
+            let si12_top = {
+                let raw = (($imm >> 52) & 0xFFF) as u32;
+                if raw & 0x800 != 0 { (raw as i32) - 0x1000 } else { raw as i32 }
+            };
             my_dynasm!($ops
-                ; lu12i.w $rt, high20
-                ; ori $rt, $rt, low12 as u32
-                ; lu32i.d $rt, mid20
-                ; lu52i.d $rt, $rt, top12
+                ; lu12i.w $rt, si20_high
+                ; ori $rt, $rt, low12
+                ; lu32i.d $rt, si20_low
+                ; lu52i.d $rt, $rt, si12_top
                 ; add.d $rd, $rs, $rt
             );
         }

@@ -1,0 +1,234 @@
+================================================================
+LoongArch64 dynasm-rs 实现问题分析报告
+================================================================
+
+一、审查范围
+-------------------------------------------
+文件                                    行数   用途
+plugin/src/arch/loongarch/mod.rs        147    Arch trait/Context/feature/reloc
+plugin/src/arch/loongarch/ast.rs        204    AST: RawArg/RegFamily/MatchData
+plugin/src/arch/loongarch/parser.rs     222    指令/寄存器/内存引用解析
+plugin/src/arch/loongarch/matching.rs   253    opmap查找/参数flatten
+plugin/src/arch/loongarch/compiler.rs   614    bitfield编码/动态检查生成
+plugin/src/arch/loongarch/loongarchdata.rs 376  数据结构/宏定义
+plugin/src/arch/loongarch/opmap.rs      ~1800  自动生成指令数据库
+plugin/src/arch/loongarch/debug.rs      361    opmap/extract格式化
+runtime/src/loongarch.rs                342    Assembler/Relocation/Register
+
+对照: RISC-V(462行parser,700行compiler), AArch64实现
+
+================================================================
+二、P0 — 功能缺失(会导致编译/运行错误)
+================================================================
+
+P0-1: Parser不支持 [base, offset] 和 [base, labelref]
+  文件: parser.rs 第60-73行
+  现状: 解析[...]只提取base寄存器,offset丢弃
+    if input.peek(syn::token::Bracket) {
+        let inner; let _ = syn::bracketed!(inner in input);
+        let base = parse_reg(ctx, inner)?...;
+        return Ok(ast::RawArg::Reference { span, base, offset: None });
+    }
+  对比: RISC-V parser(108-147行)完整支持[base,offset]和[base,labelref]
+  影响:
+    - ld.d r4,[r3,16] -> 只解析[r3],offset 16丢失
+    - workaround: opmap用[R,R,Imm]替代[R,RefOffset],语法变裸参数
+    - [base,labelref]完全不可达,PC-relative load/store缺失
+  状态: ❌ 未完成
+
+P0-2: Runtime缺少error函数                                         ✅ 已完成
+  文件: runtime/src/loongarch.rs
+  修复: 添加3个error函数+单元测试
+    - immediate_out_of_range_unsigned_32(u32)
+    - immediate_out_of_range_signed_32(i32)
+    - invalid_register(u8)
+  commit: 614c67ed5f4c
+
+P0-3: handle_static_reloc_inner占位实现
+  文件: mod.rs 第133-139行
+  现状: push(Stmt::Const(0,size)) + reloc.encode(...) -> 发出零值
+  对比: RISC-V正确计算偏移并编码
+  影响: 静态重定位产生错误指令
+  状态: ❌ 未完成
+
+P0-4: parse_features返回默认值
+  文件: mod.rs 第141-144行
+  现状: 返回ExtensionFlags::default()(只有BASE),忽略feature参数
+  影响: .feature指令无效,无法启用FP/LSX/LASX
+  状态: ❌ 未完成
+
+================================================================
+三、P1 — 编码逻辑错误
+================================================================
+
+P1-1: fun_name变量名bug                                            ✅ 已完成
+  修复: compiler.rs value→_dyn_imm, 去掉debug println
+  commit: 614c67ed5f4c
+
+P1-2: dynamic_range_check_unsigned引用aarch64                      ✅ 已完成
+  修复: aarch64→loongarch
+  commit: 614c67ed5f4c
+
+P1-3: dynamic_range_check_signed引用riscv                          ✅ 已完成
+  修复: riscv→loongarch
+  commit: 614c67ed5f4c
+
+P1-4: Usum/Ulep range check引用aarch64                             ✅ 已完成
+  修复: aarch64→loongarch
+  commit: 614c67ed5f4c
+
+P1-5: SImm动态分支debug println+缺少range check                    ✅ 已完成
+  修复: 去掉println, 恢复dynamic_range_check_signed调用
+  注意: 恢复range check后暴露了bf-jit示例代码的隐藏bug(见NEW-1)
+  commit: 614c67ed5f4c
+
+================================================================
+四、P2 — 代码质量/架构设计
+================================================================
+
+P2-1: matching.rs debug println遗留                                ✅ 已完成
+  修复: 删除3处lu12i.w debug println + 清理注释println
+  commit: 614c67ed5f4c
+
+P2-2: 全模块宽泛allow警告                                          ❌ 未完成
+  文件: mod.rs 第2-4行
+  现状: #![allow(dead_code)] #![allow(unused_variables)] #![allow(unreachable_code)]
+  影响: 无法发现未使用代码和逻辑错误
+
+P2-3: sanitize_register被注释掉                                    ❌ 未完成
+  文件: matching.rs 第84-89行
+  现状: r0不能作为目标的检查被注释掉
+  影响: 写入r0(zero)不报错
+
+P2-4: LabelReference类型定义但parser从不产生                        ❌ 未完成
+  文件: ast.rs 第158-162行, matching.rs 第136行
+  现状: matching.rs第192行 unreachable!("Label references not supported")
+  影响: PC-relative内存引用完全不可达
+
+P2-5: RefOffset/RefLabel未被opmap使用                              ❌ 未完成
+  现状: load/store全用[R,R,Imm]/[R,R,Offset]
+  原因: parser不支持[base,offset]的workaround
+  影响: 语法不一致(ld.d r4,r3,16 vs ld.d r4,[r3,16])
+
+P2-6: loongarchdata.rs中文注释                                      ❌ 未完成
+  文件: loongarchdata.rs 第92行
+  现状: /// 条件标志寄存器 (FCC matcher注释)
+
+P2-7: SingleOp宏硬编码ext_flags为BASE                              ❌ 未完成
+  文件: loongarchdata.rs 第296-323行
+  玀状: isa_flags:ISAFlags::make(0), ext_flags:&[ExtensionFlags::Ex_BASE]
+  影响: FP/LSX/LASX指令也被标记为BASE,feature过滤无效
+
+P2-8: 旧版SingleOp宏被注释未清理                                    ❌ 未完成
+  文件: loongarchdata.rs 第245-294行
+  玀状: 约50行注释掉的旧版代码
+
+================================================================
+五、P3 — 需补全的功能
+================================================================
+
+P3-1: Runtime PC32 relocation panic                                ❌ 未完成
+  文件: runtime/src/loongarch.rs 第43,101,176行
+  玀状: op_mask/encode/read_value全部panic!("unimplemented")
+  影响: 32位PC-relative重定位不可用
+
+P3-2: Runtime寄存器枚举不完整                                      ❌ 未完成
+  玀状: 只有R(GR)和RV(向量),缺少:
+    - FR(F0-F31) 浮点
+    - FCCR(FCC0-FCC7) 条件标志
+    - FCSR(0-3) 控制寄存器编号
+    - XR(X0-X31) LASX 256-bit向量
+
+P3-3: Rno0动态检查                                                 ✅ 已完成
+  修复: compiler.rs aarch64→loongarch::invalid_register
+  commit: 614c67ed5f4c
+
+P3-4: 无伪指令支持                                                  ❌ 未完成
+  玀状: la/call/tail等未实现(langref列出但未实现)
+
+P3-5: LoongArch32目标未实现功能                                     ❌ 未完成
+  文件: mod.rs 第80-106行
+  玀状: LA32/LA64指令差异未处理
+
+P3-6: RegFamily缺少LSX/LASX区分                                    ❌ 未完成
+  文件: ast.rs 第62-68行, parser.rs 第216-222行
+  玀状: VECTOR同时被LSX/LASX使用,只注册V无X
+  影响: X(expr)动态选择LASX寄存器不可用
+
+================================================================
+六、新发现问题
+================================================================
+
+NEW-1: bf-jit add_imm!/sub_imm!宏52位分支有符号编码bug
+  文件: doc/examples/bf-jit/src/loongarch64.rs 第105-113行
+  现状: add_imm!宏在52位分支中:
+    let high20 = (($imm >> 32) & 0xFFFFF) as i32;
+    // lu12i.w $rt, high20  -- SImm(5,20)需要有符号值
+  问题: ($imm >> 32) & 0xFFFFF 产生无符号20位值(最大0xFFFFF=1048575)
+        但 lu12i.w SImm(5,20) 合法范围是 [-524288, 524287]
+        0xFFFFF=1048575 远超有符号范围上限524287
+  暴露原因: P1-5恢复了SImm的dynamic_range_check_signed,
+           此前该check被注释掉所以bug被隐藏
+  影响: cargo test从workspace root有2个测试失败:
+        test_add_imm (Immediate 1048575 out of range)
+        test_sub_imm (Immediate 524288 out of range)
+  状态: ❌ 待修复
+
+================================================================
+七、遗留问题：是否应提供add_imm等便利宏给用户
+================================================================
+
+问题: LoongArch ISA缺少一条"add large immediate"指令,
+      用户需要手动组合 lu12i.w+ori+lu32i.d+lu52i.d 来加载大立即数。
+      bf-jit示例中的add_imm!/sub_imm!宏就是这种组合的实现,
+      且当前存在有符号编码bug(NEW-1)。
+
+分析方向:
+  1. 是否应在runtime或plugin层面提供add_imm/sub_imm等便利宏?
+     - 优点: 减少用户重复编写, 避免类似bug反复出现
+     - 缺点: dynasm-rs设计哲学是"只提供原语,组合由用户负责",
+             其他架构(aarch64/riscv)也未提供此类宏
+  2. 如果不提供宏, 是否应在文档中给出正确的组合示例?
+     - 修正后的bf-jit add_imm!宏可作为参考
+  3. 如果提供宏, 放在哪里?
+     - runtime/src/loongarch.rs 作为 #[macro_export]
+     - 或作为独立crate/bf-jit的公共API
+
+建议: 先修正bf-jit的add_imm!宏作为正确参考实现,
+      后续根据用户反馈决定是否提升为官方便利宏。
+
+================================================================
+八、依赖关系
+================================================================
+
+P0-2 ──> P1-2,P1-3,P1-4,P1-1,P3-3 (✅ 已完成,依赖已解除)
+P0-1 ──> P2-5,P2-4 (parser是opmap和LabelReference的前提)
+P0-4 ──> P2-7 (parse_features需要正确的ext_flags数据)
+P3-1 ──> P0-3 (PC32实现是static_reloc的前提)
+P1-5 ──> NEW-1 (恢复range check暴露了bf-jit bug)
+
+================================================================
+九、建议重构优先级（刷新版）
+================================================================
+
+序号  组合               工作量  状态    说明
+ 1    P0-2+P1-1~5+P2-1  小      ✅      runtime error函数+跨架构引用+变量名+range check
+ 1a   NEW-1              小      ❌      bf-jit add_imm!有符号编码bug
+ 2    P0-1+P2-5+P2-4    中      ❌      parser[base,offset]+修正opmap+使LabelReference可达
+ 3    P2-2~3+P2-6~8     小      ❌      代码清理:allow/sanitize/注释/旧代码
+ 4    P3-1+P0-3         中      ❌      PC32 relocation+static_reloc正确逻辑
+ 5    P0-4+P2-7         中      ❌      parse_features+SingleOp宏修正
+ 6    P3-2+P3-6         小      ❌      runtime寄存器枚举+parser X family
+ 7    P3-4              中      ❌      伪指令支持
+ 8    P3-5              中      ❌      LA32目标
+
+================================================================
+十、风险评估
+================================================================
+
+1a(NEW-1): 最安全,只修正示例代码,不影响核心dynasm
+2: 会改变load/store语法(ld.d r4,r3,16 -> ld.d r4,[r3,16])
+   需同步更新5568个测试用例中的load/store指令
+3: 最安全,只删allow/注释/旧代码,不改功能逻辑
+4: relocation编码逻辑,需参考ISA手册,最容易出错
+5: 需修改opmap生成器(Go代码),影响面广
