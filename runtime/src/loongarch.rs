@@ -240,6 +240,53 @@ pub enum RV {
 }
 reg_impls!(RV);
 
+/// Floating point registers (F0-F31)
+#[allow(missing_docs)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum FR {
+    F0 = 0x00, F1 = 0x01, F2 = 0x02, F3 = 0x03,
+    F4 = 0x04, F5 = 0x05, F6 = 0x06, F7 = 0x07,
+    F8 = 0x08, F9 = 0x09, F10= 0x0A, F11= 0x0B,
+    F12= 0x0C, F13= 0x0D, F14= 0x0E, F15= 0x0F,
+    F16= 0x10, F17= 0x11, F18= 0x12, F19= 0x13,
+    F20= 0x14, F21= 0x15, F22= 0x16, F23= 0x17,
+    F24= 0x18, F25= 0x19, F26= 0x1A, F27= 0x1B,
+    F28= 0x1C, F29= 0x1D, F30= 0x1E, F31= 0x1F,
+}
+reg_impls!(FR);
+
+/// Floating point condition code registers (FCC0-FCC7)
+#[allow(missing_docs)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum FCCR {
+    FCC0 = 0x00, FCC1 = 0x01, FCC2 = 0x02, FCC3 = 0x03,
+    FCC4 = 0x04, FCC5 = 0x05, FCC6 = 0x06, FCC7 = 0x07,
+}
+reg_impls!(FCCR);
+
+/// Floating point control/status registers (FCSR0-FCSR3)
+#[allow(missing_docs)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum FCSR {
+    FCSR0 = 0x00, FCSR1 = 0x01, FCSR2 = 0x02, FCSR3 = 0x03,
+}
+reg_impls!(FCSR);
+
+/// LASX 256-bit vector registers (X0-X31)
+#[allow(missing_docs)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum XR {
+    X0 = 0x00, X1 = 0x01, X2 = 0x02, X3 = 0x03,
+    X4 = 0x04, X5 = 0x05, X6 = 0x06, X7 = 0x07,
+    X8 = 0x08, X9 = 0x09, X10= 0x0A, X11= 0x0B,
+    X12= 0x0C, X13= 0x0D, X14= 0x0E, X15= 0x0F,
+    X16= 0x10, X17= 0x11, X18= 0x12, X19= 0x13,
+    X20= 0x14, X21= 0x15, X22= 0x16, X23= 0x17,
+    X24= 0x18, X25= 0x19, X26= 0x1A, X27= 0x1B,
+    X28= 0x1C, X29= 0x1D, X30= 0x1E, X31= 0x1F,
+}
+reg_impls!(XR);
+
 /// Handler for `u32` out-of-range LoongArch immediates.
 #[inline(never)]
 pub fn immediate_out_of_range_unsigned_32(immediate: u32) -> ! {
