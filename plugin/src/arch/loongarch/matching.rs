@@ -113,8 +113,8 @@ impl Matcher {
             RawArg::Register { reg, .. } => match self {
                 Matcher::R => reg.family() == RegFamily::INTEGER,
                 Matcher::F => reg.family() == RegFamily::FP,
-                Matcher::V => reg.family() == RegFamily::VECTOR,
-                Matcher::X => reg.family() == RegFamily::VECTOR,
+                Matcher::V => reg.family() == RegFamily::LSX,
+                Matcher::X => matches!(reg.family(), RegFamily::LSX | RegFamily::LASX),
                 Matcher::C => reg.family() == RegFamily::FCC,
                 Matcher::Reg(regid) => reg.as_id() == Some(*regid),
                 _ => false,

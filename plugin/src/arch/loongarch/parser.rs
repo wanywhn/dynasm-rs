@@ -192,7 +192,7 @@ lazy_static! {
             ("f24", F24), ("f25", F25), ("f26", F26), ("f27", F27),
             ("f28", F28), ("f29", F29), ("f30", F30), ("f31", F31),
 
-            // Vector registers
+            // Vector registers (LSX)
             ("v0", V0), ("v1", V1), ("v2", V2), ("v3", V3),
             ("v4", V4), ("v5", V5), ("v6", V6), ("v7", V7),
             ("v8", V8), ("v9", V9), ("v10", V10), ("v11", V11),
@@ -201,6 +201,16 @@ lazy_static! {
             ("v20", V20), ("v21", V21), ("v22", V22), ("v23", V23),
             ("v24", V24), ("v25", V25), ("v26", V26), ("v27", V27),
             ("v28", V28), ("v29", V29), ("v30", V30), ("v31", V31),
+
+            // LASX registers (256-bit)
+            ("x0", X0), ("x1", X1), ("x2", X2), ("x3", X3),
+            ("x4", X4), ("x5", X5), ("x6", X6), ("x7", X7),
+            ("x8", X8), ("x9", X9), ("x10", X10), ("x11", X11),
+            ("x12", X12), ("x13", X13), ("x14", X14), ("x15", X15),
+            ("x16", X16), ("x17", X17), ("x18", X18), ("x19", X19),
+            ("x20", X20), ("x21", X21), ("x22", X22), ("x23", X23),
+            ("x24", X24), ("x25", X25), ("x26", X26), ("x27", X27),
+            ("x28", X28), ("x29", X29), ("x30", X30), ("x31", X31),
 
             // CFR
             ("fcc0", FCC0), ("fcc1", FCC1), ("fcc2", FCC2), ("fcc3", FCC3),
@@ -216,7 +226,8 @@ lazy_static! {
         static MAP: &[(&str, ast::RegFamily)] = &[
             ("R", ast::RegFamily::INTEGER),
             ("F", ast::RegFamily::FP),
-            ("V", ast::RegFamily::VECTOR)
+            ("V", ast::RegFamily::LSX),
+            ("X", ast::RegFamily::LASX),
         ];
         MAP.iter().cloned().collect()
     };

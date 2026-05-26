@@ -39,7 +39,7 @@ pub enum RegId {
     F24 = 0x38, F25 = 0x39, F26 = 0x3A, F27 = 0x3B,
     F28 = 0x3C, F29 = 0x3D, F30 = 0x3E, F31 = 0x3F,
 
-    // Vector registers (LSX/LASX)
+    // Vector registers (LSX)
     V0  = 0x40, V1  = 0x41, V2  = 0x42, V3  = 0x43,
     V4  = 0x44, V5  = 0x45, V6  = 0x46, V7  = 0x47,
     V8  = 0x48, V9  = 0x49, V10 = 0x4A, V11 = 0x4B,
@@ -48,6 +48,16 @@ pub enum RegId {
     V20 = 0x54, V21 = 0x55, V22 = 0x56, V23 = 0x57,
     V24 = 0x58, V25 = 0x59, V26 = 0x5A, V27 = 0x5B,
     V28 = 0x5C, V29 = 0x5D, V30 = 0x5E, V31 = 0x5F,
+
+    // Vector registers (LASX, 256-bit)
+    X0  = 0xA0, X1  = 0xA1, X2  = 0xA2, X3  = 0xA3,
+    X4  = 0xA4, X5  = 0xA5, X6  = 0xA6, X7  = 0xA7,
+    X8  = 0xA8, X9  = 0xA9, X10 = 0xAA, X11 = 0xAB,
+    X12 = 0xAC, X13 = 0xAD, X14 = 0xAE, X15 = 0xAF,
+    X16 = 0xB0, X17 = 0xB1, X18 = 0xB2, X19 = 0xB3,
+    X20 = 0xB4, X21 = 0xB5, X22 = 0xB6, X23 = 0xB7,
+    X24 = 0xB8, X25 = 0xB9, X26 = 0xBA, X27 = 0xBB,
+    X28 = 0xBC, X29 = 0xBD, X30 = 0xBE, X31 = 0xBF,
 
     // CFR
     FCC0 = 0x60, FCC1 = 0x61, FCC2 = 0x62, FCC3 = 0x63,
@@ -62,7 +72,8 @@ pub enum RegId {
 pub enum RegFamily {
     INTEGER = 0,
     FP = 1,
-    VECTOR = 2,
+    LSX = 2,
+    LASX = 5,
     FCC = 3,
     FCSR = 4,
 }
@@ -78,9 +89,10 @@ impl RegId {
         match self as u8 >> 5 {
             0 => RegFamily::INTEGER,
             1 => RegFamily::FP,
-            2 => RegFamily::VECTOR,
+            2 => RegFamily::LSX,
             3 => RegFamily::FCC,
             4 => RegFamily::FCSR,
+            5 => RegFamily::LASX,
             _ => unreachable!(),
         }
     }
@@ -91,7 +103,8 @@ impl fmt::Display for RegId {
         match self.family() {
             RegFamily::INTEGER => write!(f, "r{}", self.code()),
             RegFamily::FP => write!(f, "f{}", self.code()),
-            RegFamily::VECTOR => write!(f, "v{}", self.code()),
+            RegFamily::LSX => write!(f, "v{}", self.code()),
+            RegFamily::LASX => write!(f, "x{}", self.code()),
             RegFamily::FCC => write!(f, "fcc{}", self.code()),
             RegFamily::FCSR => write!(f, "fcsr{}", self.code()),
         }
