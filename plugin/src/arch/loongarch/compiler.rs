@@ -112,25 +112,24 @@ pub(super) fn compile_instruction(ctx: &mut Context, data: MatchData) -> Result<
                 Command::Sfields(arr) => {
                                 fun_name(&mut statics, &mut dynamics, value, arr, 0)?;
                             },
-                Command::SImm(offset, bitlen) => {
+Command::SImm(offset, bitlen) => {
                     // let arr = [offset, bitlen];
                     // fun_name(&mut statics, &mut dynamics, value, &arr, 0)?;
-                                let mask = bitmask(bitlen);
-                                let half = -1i32 << (bitlen - 1);
-                                let span = value.span();
-                                if let Some((_, scaled)) = static_range_check(value, half, mask, 0, span)? {
-                                    statics.push((offset, scaled & mask));
-
-                                } else {
-                                    println!("dynamic: mask:{:#?}, half:{:#?}, value:{:#?}", mask, half, value);
-
-                                    // let check = dynamic_range_check_signed(value.span(), half, mask, 0);
-                                    // #check; 
-                                    dynamics.push((offset, quote_spanned!{ value.span()=>
-                                        { let _dyn_imm: i32 = #value; (_dyn_imm as u32) & #mask }
-                                    }));
-                                }
+                    let mask = bitmask(bitlen);
+                    let half = -1i32 << (bitlen - 1);
+                    let span = value.span();
+                    if let Some((_, scaled)) = static_range_check(value, half, mask, 0, span)? {
+                        statics.push((offset, scaled & mask));
+                    } else {
+                        let check = dynamic_range_check_signed(value.span(), half, mask, 0);
+                        dynamics.push((
+                            offset,
+                            quote_spanned! { value.span()=>
+                                { let _dyn_imm: i32 = #value; #check; (_dyn_imm as u32) & #mask }
                             },
+                        ));
+                    }
+                }
                     Command::Usum(offset, bitlen) => {
                         let mask = bitmask(bitlen);
                         let prev_value = if let Some(FlatArg::Immediate {value: prev_value } ) = data.args.get(cursor - 1) {
@@ -158,7 +157,7 @@ pub(super) fn compile_instruction(ctx: &mut Context, data: MatchData) -> Result<
                             statics.push((offset, number & mask));
                         } else {
                             let check = quote_spanned!{ value.span()=>
-                                if (#value - 1u32) > (#mask - #prev_value) { ::dynasmrt::aarch64::immediate_out_of_range_unsigned_32(#value); }
+                                if (#value - 1u32) > (#mask - #prev_value) { ::dynasmrt::loongarch::immediate_out_of_range_unsigned_32(#value); }
                             };
     
                             dynamics.push((offset, quote_spanned!{ value.span()=>
@@ -194,7 +193,7 @@ pub(super) fn compile_instruction(ctx: &mut Context, data: MatchData) -> Result<
                         } else {
 
                             let check = quote_spanned!{ value.span()=>
-                                if (#value) > (#prev_value) { ::dynasmrt::aarch64::immediate_out_of_range_unsigned_32(#value); }
+                                if (#value) > (#prev_value) { ::dynasmrt::loongarch::immediate_out_of_range_unsigned_32(#value); }
                             };
     
                             dynamics.push((offset, quote_spanned!{ value.span()=>
@@ -387,14 +386,13 @@ fn fun_name(statics: &mut Vec<(u8, u32)>, dynamics: &mut Vec<(u8, TokenStream)>,
     } else {
         let check = dynamic_range_check_signed(value.span(), half, mask, scale);
         let mut consumed_len = 0;
-        println!("{:#?}, {:#?}", value, arr);
         for w in arr.windows(2).step_by(2) {
             let offset = w[0];
             let len = w[1];
             let par_ask = bitmask(len);
             consumed_len += len;
             dynamics.push((offset, quote_spanned!{ value.span()=>
-                {let _dyn_imm: i32 = #value; #check; ((value >> (#bitlen - #consumed_len)) as u32) & #par_ask }
+                {let _dyn_imm: i32 = #value; #check; ((_dyn_imm >> (#bitlen - #consumed_len)) as u32) & #par_ask }
             }));
         }
     })
@@ -588,7 +586,7 @@ fn dynamic_range_check_unsigned(span: Span, bias: u32, range: u32, scale: u8) ->
         }
     };
 
-    quote_spanned!{ span => if #check { ::dynasmrt::aarch64::immediate_out_of_range_unsigned_32(_dyn_imm); }}
+    quote_spanned!{ span => if #check { ::dynasmrt::loongarch::immediate_out_of_range_unsigned_32(_dyn_imm); }}
 }
 
 /// emits the code for a range check on a signed immediate.
@@ -611,5 +609,5 @@ fn dynamic_range_check_signed(span: Span, bias: i32, range: u32, scale: u8) -> T
         }
     };
 
-    quote_spanned!{ span => if #check { ::dynasmrt::riscv::immediate_out_of_range_signed_32(_dyn_imm); }}
+    quote_spanned!{ span => if #check { ::dynasmrt::loongarch::immediate_out_of_range_signed_32(_dyn_imm); }}
 }

@@ -239,13 +239,104 @@ pub enum RV {
     V28= 0x1C, V29= 0x1D, V30= 0x1E, V31= 0x1F,
 }
 reg_impls!(RV);
+
+/// Handler for `u32` out-of-range LoongArch immediates.
+#[inline(never)]
+pub fn immediate_out_of_range_unsigned_32(immediate: u32) -> ! {
+    panic!("Cannot assemble this LoongArch instruction. Immediate {immediate} is out of range.")
+}
+
+/// Handler for `i32` out-of-range LoongArch immediates.
+#[inline(never)]
+pub fn immediate_out_of_range_signed_32(immediate: i32) -> ! {
+    panic!("Cannot assemble this LoongArch instruction. Immediate {immediate} is out of range.")
+}
+
+/// Handler for `u64` out-of-range LoongArch immediates.
+#[inline(never)]
+pub fn immediate_out_of_range_unsigned_64(immediate: u64) -> ! {
+    panic!("Cannot assemble this LoongArch instruction. Immediate {immediate} is out of range.")
+}
+
+/// Handler for `i64` out-of-range LoongArch immediates.
+#[inline(never)]
+pub fn immediate_out_of_range_signed_64(immediate: i64) -> ! {
+    panic!("Cannot assemble this LoongArch instruction. Immediate {immediate} is out of range.")
+}
+
+/// Handler for invalid register number (e.g. r0 used where r0 is forbidden).
+#[inline(never)]
+pub fn invalid_register(register: u8) -> ! {
+    panic!("Cannot assemble this LoongArch instruction. Register number {register} is invalid for this operand.")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
     fn test_assembler_creation() {
-        // Basic test to verify assembler can be created
         let _ = Assembler::new();
+    }
+
+    #[test]
+    #[should_panic(expected = "LoongArch")]
+    fn test_immediate_unsigned_32_out_of_range() {
+        immediate_out_of_range_unsigned_32(999);
+    }
+
+    #[test]
+    #[should_panic(expected = "LoongArch")]
+    fn test_immediate_signed_32_out_of_range() {
+        immediate_out_of_range_signed_32(-999);
+    }
+
+    #[test]
+    #[should_panic(expected = "LoongArch")]
+    fn test_immediate_unsigned_64_out_of_range() {
+        immediate_out_of_range_unsigned_64(999);
+    }
+
+    #[test]
+    #[should_panic(expected = "LoongArch")]
+    fn test_immediate_signed_64_out_of_range() {
+        immediate_out_of_range_signed_64(-999);
+    }
+
+    #[test]
+    #[should_panic(expected = "LoongArch")]
+    fn test_invalid_register() {
+        invalid_register(0);
+    }
+
+    #[test]
+    fn test_error_messages_contain_loongarch() {
+        // Verify error functions reference LoongArch, not other architectures
+        // These must panic with "LoongArch" in the message
+        let msg_u32 = std::panic::catch_unwind(|| immediate_out_of_range_unsigned_32(0));
+        assert!(msg_u32.is_err());
+        if let Err(p) = msg_u32 {
+            if let Some(s) = p.downcast_ref::<String>() {
+                assert!(s.contains("LoongArch"), "Error message should reference LoongArch, got: {s}");
+                assert!(!s.contains("Aarch64"), "Error message should NOT reference Aarch64, got: {s}");
+                assert!(!s.contains("RISC-V"), "Error message should NOT reference RISC-V, got: {s}");
+            }
+        }
+
+        let msg_i32 = std::panic::catch_unwind(|| immediate_out_of_range_signed_32(0));
+        assert!(msg_i32.is_err());
+        if let Err(p) = msg_i32 {
+            if let Some(s) = p.downcast_ref::<String>() {
+                assert!(s.contains("LoongArch"), "Error message should reference LoongArch, got: {s}");
+            }
+        }
+
+        let msg_reg = std::panic::catch_unwind(|| invalid_register(0));
+        assert!(msg_reg.is_err());
+        if let Err(p) = msg_reg {
+            if let Some(s) = p.downcast_ref::<String>() {
+                assert!(s.contains("LoongArch"), "Error message should reference LoongArch, got: {s}");
+            }
+        }
     }
 }
