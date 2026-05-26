@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use syn::spanned::Spanned;
 use syn::{parse, Token};
 use lazy_static::lazy_static;
 
@@ -57,7 +58,7 @@ fn parse_arg(ctx: &mut Context, input: parse::ParseStream) -> parse::Result<ast:
         });
     }
 
-    // A memory reference. Format: offset[base] or [base]
+    // A memory reference. Format: [base, offset] or [base]
     if input.peek(syn::token::Bracket) {
         let span = input.cursor().span();
         let inner;
@@ -66,10 +67,17 @@ fn parse_arg(ctx: &mut Context, input: parse::ParseStream) -> parse::Result<ast:
 
         let base = parse_reg(ctx, inner)?.ok_or_else(|| inner.error("Expected register"))?;
 
+        let offset = if inner.peek(Token![,]) {
+            let _: Token![,] = inner.parse()?;
+            Some(inner.parse()?)
+        } else {
+            None
+        };
+
         return Ok(ast::RawArg::Reference {
             span,
             base,
-            offset: None
+            offset
         });
     }
 
@@ -81,8 +89,69 @@ fn parse_arg(ctx: &mut Context, input: parse::ParseStream) -> parse::Result<ast:
         })
     }
 
-    // Immediate
+    // GAS-style offset(base) syntax: e.g. 16(r3) or -403(r2).
+    // syn::Expr greedily parses `16(r3)` as a function call Expr::Call {
+    //     func: Expr::Lit(16), args: [Expr::Path(r3)]
+    // }
+    // And `-403(r2)` as Expr::Unary { op: Neg, expr: Expr::Call {
+    //     func: Expr::Lit(403), args: [Expr::Path(r2)]
+    // }}.
+    // We destructure these to produce a Reference arg.
     let expr: syn::Expr = input.parse()?;
+    // Track whether the original expr had a negation prefix
+    let (call_expr, is_negated) = match &expr {
+        syn::Expr::Call(c) => (Some(c), false),
+        syn::Expr::Unary(u) => {
+            if matches!(u.op, syn::UnOp::Neg(_)) {
+                if let syn::Expr::Call(c) = &*u.expr {
+                    (Some(c), true)
+                } else {
+                    (None, false)
+                }
+            } else {
+                (None, false)
+            }
+        }
+        _ => (None, false),
+    };
+    if let Some(call_expr) = call_expr {
+        let func_is_literal = matches!(&*call_expr.func, syn::Expr::Lit(_) | syn::Expr::Unary(_));
+        if func_is_literal && call_expr.args.len() == 1 {
+            if let syn::Expr::Path(path) = &call_expr.args[0] {
+                if path.path.segments.len() == 1 {
+                    let base_name = path.path.segments[0].ident.to_string();
+                    if let Some(&id) = LOONGARCH_REGISTERS.get(&*base_name) {
+                        let base = ast::Register::Static(id);
+                        // Build the offset expression from just the func of the call.
+                        // For `16(r3)` -> func is Lit(16).
+                        // For `-403(r2)` -> func is Lit(403), is_negated=true,
+                        //   so we reconstruct Neg(Lit(403)).
+                        let inner_offset: syn::Expr = match &*call_expr.func {
+                            syn::Expr::Lit(lit) => syn::Expr::Lit(lit.clone()),
+                            syn::Expr::Unary(u) => syn::Expr::Unary(u.clone()),
+                            _ => unreachable!(),
+                        };
+                        let offset_expr = if is_negated {
+                            syn::Expr::Unary(syn::ExprUnary {
+                                attrs: vec![],
+                                op: syn::UnOp::Neg(syn::token::Minus([expr.span()])),
+                                expr: Box::new(inner_offset),
+                            })
+                        } else {
+                            inner_offset
+                        };
+                        return Ok(ast::RawArg::Reference {
+                            span: start,
+                            base,
+                            offset: Some(offset_expr),
+                        });
+                    }
+                }
+            }
+        }
+    }
+
+    // Not a GAS-style memory reference — treat as regular immediate
     Ok(ast::RawArg::Immediate { value: expr })
 }
 

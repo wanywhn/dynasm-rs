@@ -182,14 +182,19 @@ func generateOpmapFile(path string, insns []InsnDescription) error {
 			}
 
 			// 生成处理器列表
-			var procList []string
+				// RefOffset expands to base register + offset, so we emit R(5) + offset command
+				var procList []string
 
-			for idx, arg := range args {
-				procList = append(procList, argToProcessor(mnemonic, idx, arg))
-			}
+				for idx, arg := range args {
+					if arg.Kind == ArgKindRefOffset {
+						procList = append(procList, "R(5)", "SImm(10, 12)")
+					} else {
+						procList = append(procList, argToProcessor(mnemonic, idx, arg))
+					}
+				}
 
-			file.WriteString(fmt.Sprintf("    Single(%s) , [%s] => [%s];\n",
-				formattedBits, strings.Join(argList, ", "), strings.Join(procList, ", ")))
+				file.WriteString(fmt.Sprintf("    Single(%s) , [%s] => [%s];\n",
+					formattedBits, strings.Join(argList, ", "), strings.Join(procList, ", ")))
 		}
 
 		file.WriteString("]\n\n")
@@ -227,6 +232,8 @@ func argToRust(mnemonic string, idx int, arg *Arg) string {
 		return "Imm"
 	case ArgKindOffsetSI20, ArgKindOffsetSI12, ArgKindOffsetSI14, ArgKindOffsetSI16, ArgKindOffsetSI26:
 		return "Offset"
+	case ArgKindRefOffset:
+		return "RefOffset"
 
 	default:
 		if len(arg.Slots) == 0 {
@@ -253,6 +260,14 @@ func convertFormat(f *common.InsnFormat) *InsnFormat {
 		})
 	}
 	return &InsnFormat{Args: args}
+}
+
+func copyArg(a *Arg) *Arg {
+	return &Arg{
+		Kind:  a.Kind,
+		Slots: copySlots(a.Slots),
+		Post:  copyPost(a.Post),
+	}
 }
 
 func copyFormat(f *InsnFormat) *InsnFormat {
@@ -410,8 +425,75 @@ func processSpecialInstructions(descs []InsnDescription) []InsnDescription {
 
 	tmp_descs := newFunction(descs, load_store_insn)
 
+	// Add RefOffset variants for load/store instructions
+	refOffsetDescs := addRefOffsetVariants(descs, load_store_insn)
+	tmp_descs = append(tmp_descs, refOffsetDescs...)
+
 	descs = append(descs, tmp_descs...)
 	return descs
+}
+
+// addRefOffsetVariants generates [dest_reg, RefOffset] entries for load/store
+// instructions, enabling the parser's [base, offset] and offset(base) syntax.
+// The RefOffset matcher expands to Register(base) + Immediate(offset) in flatten_args.
+func addRefOffsetVariants(descs []InsnDescription, load_store_insn map[string]ArgKind) []InsnDescription {
+	var result []InsnDescription
+
+	for i := range descs {
+		desc := &descs[i]
+		mnemonic := desc.Mnemonic
+		if origName, ok := desc.Attribs["orig_name"]; ok && origName != desc.Mnemonic {
+			mnemonic = origName
+		}
+
+		_, ok := load_store_insn[mnemonic]
+		if !ok {
+			continue
+		}
+
+		format := desc.OrigFormat
+		if format == nil {
+			format = desc.Format
+		}
+		if format == nil {
+			continue
+		}
+
+		var destReg *Arg
+		var offsetArg *Arg
+		for _, arg := range format.Args {
+			if destReg == nil && (arg.Kind == ArgKindIntReg || arg.Kind == ArgKindFPReg) {
+				destReg = arg
+			}
+			if arg.Kind == ArgKindSignedImm ||
+				arg.Kind == ArgKindOffsetSI12 ||
+				arg.Kind == ArgKindOffsetSI14 ||
+				arg.Kind == ArgKindOffsetSI16 ||
+				arg.Kind == ArgKindOffsetSI20 ||
+				arg.Kind == ArgKindOffsetSI26 {
+				offsetArg = arg
+			}
+		}
+		if destReg == nil || offsetArg == nil {
+			continue
+		}
+
+		refOffsetFormat := &InsnFormat{
+			Args: []*Arg{
+				copyArg(destReg),
+				{Kind: ArgKindRefOffset, Slots: nil},
+			},
+		}
+
+		result = append(result, InsnDescription{
+			Word:       desc.Word,
+			Mnemonic:   desc.Mnemonic,
+			Format:     refOffsetFormat,
+			OrigFormat: nil,
+			Attribs:    desc.Attribs,
+		})
+	}
+	return result
 }
 
 func newFunction(descs []InsnDescription, load_store_insn map[string]ArgKind) []InsnDescription {
@@ -454,6 +536,9 @@ func newFunction(descs []InsnDescription, load_store_insn map[string]ArgKind) []
 func argToProcessor(mnemonic string, idx int, arg *Arg) string {
 	if arg == nil {
 		return "Unknown"
+	}
+	if arg.Kind == ArgKindRefOffset {
+		return "RefOffset"
 	}
 	if len(arg.Slots) == 0 {
 		return "Unknown"
