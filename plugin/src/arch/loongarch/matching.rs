@@ -39,7 +39,7 @@ if let Some(mut match_data) = match_args(&instruction.args, data) {
 /// - Extern relocations are handled properly
 /// - Memory references use valid base registers
 /// - Immediate values are within valid ranges
-fn sanitize_args(args: &mut [RawArg], target: &LoongArchTarget) -> Result<(), Option<String>> {
+fn sanitize_args(args: &mut [RawArg], _target: &LoongArchTarget) -> Result<(), Option<String>> {
     for arg in args {
         match arg {
             RawArg::Register { reg, span } => sanitize_register(reg, *span)?,
@@ -71,12 +71,12 @@ fn sanitize_args(args: &mut [RawArg], target: &LoongArchTarget) -> Result<(), Op
     Ok(())
 }
 
-/// Sanitize a single register, checking for invalid uses
-fn sanitize_register(register: &Register, span: Span) -> Result<(), Option<String>> {
-    // if let Some(RegId::R0) = register.as_id() {
-        // emit_error!(span, "$zero (r0) cannot be used as a destination register");
-        // return Err(None);
-    // }
+/// Sanitize a single register, checking for invalid uses.
+/// NOTE: LoongArch r0 ($zero) is valid as a destination for some instructions
+/// (e.g., `addi.d $zero, rj, 0` acts as NOP). Per-instruction r0 restrictions
+/// are handled by the Rno0 matcher in compiler.rs. A global r0 ban here would
+/// be overly aggressive. Implement instruction-specific checks when needed.
+fn sanitize_register(_register: &Register, _span: Span) -> Result<(), Option<String>> {
     Ok(())
 }
 

@@ -8,6 +8,7 @@ use std::fmt;
 /// A template contains the information for the static parts of an instruction encoding, as well
 /// as its bitsize and length
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[allow(dead_code)] // Double/Many variants unused until multi-instruction sequences are implemented
 pub enum Template {
     /// A single 32-bit instruction
     Single(u32),
@@ -51,12 +52,14 @@ bitflags! {
 }
 
 impl ISAFlags {
+    #[allow(dead_code)] // make() unused until parse_features uses it (P0-4)
     const fn make(bits: u8) -> ISAFlags {
         ISAFlags::from_bits_truncate(bits)
     }
 }
 
 impl ExtensionFlags {
+    #[allow(dead_code)] // make() unused until parse_features uses it (P0-4)
     const fn make(bits: u64) -> ExtensionFlags {
         ExtensionFlags::from_bits_truncate(bits)
     }
@@ -84,12 +87,13 @@ impl Default for ExtensionFlags {
 
 /// Matchers validate the types of arguments passed to an instruction
 #[derive(Debug, Clone, Copy, PartialEq)]
+#[allow(dead_code)] // T/Reg/Ref/RefOffset/RefLabel/Ident unused until parser supports [base,offset] and label refs (P0-1)
 pub enum Matcher {
     /// A general purpose register
     R,
     /// A floating point register
     F,
-    /// 条件标志寄存器
+    /// Condition flag register
     C,
     /// fcsr
     FCSR,
@@ -117,6 +121,7 @@ pub enum Matcher {
 }
 
 /// Encoding commands specify how arguments should be encoded
+#[allow(dead_code)] // Variants are constructed by dynasm_opmap/dynasm_extract macros (feature-gated)
 #[derive(Debug, Clone)]
 pub enum Command {
     // Meta commands
@@ -137,6 +142,7 @@ pub enum Command {
     /// A 3-bit floating point cond register encoding
     C(u8),
     /// A 2-bit floating point control/status register encoding
+    #[allow(dead_code)] // FCSR field value unused until FCSR dynamic encoding is implemented
     FCSR(u8),
     /// A scratch register
     T(u8),
@@ -179,6 +185,7 @@ pub enum Command {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[allow(dead_code)] // B/PC32/LITERAL variants unused until relocation implementation is complete (P3-1/P0-3)
 pub enum Relocation {
     // Branch instructions (beq, bne, jirl)
     // 16-bit offset, 2-bit aligned
@@ -241,57 +248,6 @@ pub struct Opdata {
     /// Encoder commands
     pub commands: &'static [Command],
 }
-
-// macro_rules! SingleOp {
-//     ( $template:expr, $isa:expr, [ $( $matcher:expr ),* ], [ $( $command:expr ),* ], [ $( $extension:expr ),* ] ) => {
-//         {
-//             const MATCHERS: &'static [Matcher] = {
-//                 #[allow(unused_imports)]
-//                 use self::Matcher::*;
-//                 &[ $(
-//                     $matcher
-//                 ),* ]
-//             };
-//             const COMMANDS: &'static [Command] = {
-//                 #[allow(unused_imports)]
-//                 use self::Command::*;
-//                 #[allow(unused_imports)]
-//                 use self::Relocation::*;
-//                 &[ $(
-//                     $command
-//                 ),* ]
-//             };
-//             const EXTENSIONS: &'static [ExtensionFlags] = {
-//                 #[allow(unused_imports)]
-//                 &[ $(
-//                     ExtensionFlags::make($extension)
-//                 ),* ]
-//             };
-
-//             use self::Template::*;
-//             Opdata {
-//                 template: $template,
-//                 isa_flags: ISAFlags::make($isa),
-//                 ext_flags: EXTENSIONS,
-//                 matchers: MATCHERS,
-//                 commands: COMMANDS,
-//             }
-//         }
-//     }
-// }
-
-// macro_rules! Ops {
-//     ( $( $name:tt = [ $( $template:expr , $isa:expr , [ $( $matcher:expr ),* ] => [ $( $command:expr ),* ] , [ $( $extension:expr ),* ] ; )+ ] , )* ) => {
-//         [ $(
-//             (
-//                 $name,
-//                 &[ $(
-//                     SingleOp!( $template, $isa, [ $( $matcher ),* ], [ $( $command ),* ], [ $( $extension ),* ] )
-//                 ),+ ] as &[_]
-//             )
-//         ),* ]
-//     }
-// }
 
 macro_rules! SingleOp {
     ( $base:expr, [ $( $matcher:expr ),* ], [ $( $command:expr ),* ] ) => {

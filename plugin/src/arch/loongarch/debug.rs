@@ -43,7 +43,7 @@ pub fn extract_opmap() -> String {
     buf.join("\n")
 }
 
-pub fn format_opdata_list(name: &str, data: &[Opdata], target: LoongArchTarget) -> String {
+pub fn format_opdata_list(name: &str, data: &[Opdata], _target: LoongArchTarget) -> String {
     let mut forms = Vec::new();
 
     for data in data {
@@ -112,14 +112,16 @@ fn format_constraints(data: &Opdata) -> String {
             Command::R(_) => (),
             Command::Rno0(_) => constraints.push("rd cannot be r0".to_string()),
             Command::Rdiff(_) => constraints.push("rd cannot eque previous ".to_string()),
-            Command::UImm(start, end) => {
-                                // let s = format!("0 <= imm <= {}", (1u32 << (end.wrapping_sub(*start) as u8)) - 1);
-                                // constraints.push(s);
-                            },
-            Command::SImm(start, end) => {
-                                // let s = format!("{} <= imm <= {}", - 1i32 << (end.wrapping_sub(*start) as u8) /2  - 1, 1i32 << (end.wrapping_sub(*start)as u8) /2);
-                                // constraints.push(s);
-                            },
+            Command::UImm(_start, _end) => {
+                // TODO: implement constraint formatting
+                // let s = format!("0 <= imm <= {}", (1u32 << (end.wrapping_sub(*start) as u8)) - 1);
+                // constraints.push(s);
+            },
+            Command::SImm(_start, _end) => {
+                // TODO: implement constraint formatting
+                // let s = format!("{} <= imm <= {}", - 1i32 << (end.wrapping_sub(*start) as u8) /2  - 1, 1i32 << (end.wrapping_sub(*start)as u8) /2);
+                // constraints.push(s);
+            },
             Command::Ufields(array) => {
                                 let sum = sum_adjacent_diffs(array);
                                 let s = format!("0 <= imm <= {}", sum);

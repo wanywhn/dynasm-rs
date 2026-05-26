@@ -27,7 +27,7 @@ pub(super) fn compile_instruction(ctx: &mut Context, data: MatchData) -> Result<
     // Any relocation will be encoded in this list
     let mut relocations = Vec::new();
 
-    for (i, command) in data.data.commands.iter().enumerate(){
+    for (_i, command) in data.data.commands.iter().enumerate(){
         // meta commands
         match *command {
             Command::Repeat => {
@@ -399,6 +399,7 @@ fn fun_name(statics: &mut Vec<(u8, u32)>, dynamics: &mut Vec<(u8, TokenStream)>,
 }
 
 /// Handles the encoding of immediates in a somewhat efficient fashion.
+#[allow(dead_code)] // ImmediateEncoder unused until multi-instruction immediate encoding is fully implemented
 struct ImmediateEncoder<'a> {
     pub dynamic_value: &'a syn::Expr,
     pub static_value: Option<i64>,
@@ -406,8 +407,9 @@ struct ImmediateEncoder<'a> {
     pub span: Span
 }
 
+#[allow(dead_code)] // ImmediateEncoder methods unused until multi-instruction immediate encoding is fully implemented
 impl<'a> ImmediateEncoder<'a> {
-    pub fn new(dynamic_value: &syn::Expr) -> ImmediateEncoder {
+    pub fn new(dynamic_value: &'a syn::Expr) -> ImmediateEncoder<'a> {
         #![allow(unexpected_cfgs)]
         let static_value;
 
@@ -431,14 +433,13 @@ impl<'a> ImmediateEncoder<'a> {
         }
     }
 
-    pub fn gather_fields(&mut self, commands: &[Command], index: usize, statics: &mut Vec<(u8, u32)>) {
+    #[allow(dead_code)] // gather_fields unused until multi-instruction immediate encoding is fully implemented
+    pub fn gather_fields(&mut self, commands: &[Command], index: usize, _statics: &mut Vec<(u8, u32)>) {
         loop {
             match commands.get(index) {
                 Some(Command::Next) => break,
-                Some(_)
-                | None => panic!("Bad encoding data, integer field sequence is not terminated"),
+                Some(_) | None => panic!("Bad encoding data, integer field sequence is not terminated"),
             }
-            index += 1;
         }
     }
 
@@ -532,7 +533,7 @@ impl<'a> ImmediateEncoder<'a> {
 /// (value - min) <= range
 /// ((value - min) & bitmask(scale)) == 0
 /// returning (value - min) on success.
-fn static_range_check(expr: &syn::Expr, min: i32, range: u32, scale: u8, span: Span) -> Result<Option<(u32, u32)>, Option<String>> {
+fn static_range_check(expr: &syn::Expr, min: i32, range: u32, scale: u8, _span: Span) -> Result<Option<(u32, u32)>, Option<String>> {
     #![allow(unexpected_cfgs)]
 
     // signed 64-bit parse is always safe for 32-bit numbers

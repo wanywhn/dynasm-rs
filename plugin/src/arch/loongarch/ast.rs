@@ -100,6 +100,7 @@ impl fmt::Display for RegId {
 
 impl Register {
     /// Get the 5-bit code for this Register, if statically known.
+    #[allow(dead_code)] // code() used only in compiler static branch, not called directly elsewhere
     pub fn code(&self) -> Option<u8> {
         match self {
             Register::Static(code) => Some(code.code()),
@@ -116,6 +117,7 @@ impl Register {
     }
 
     /// Returns true if this Register is dynamic
+    #[allow(dead_code)] // is_dynamic() used only in compiler dynamic branch detection
     pub fn is_dynamic(&self) -> bool {
         match self {
             Register::Static(_) => false,
@@ -134,6 +136,7 @@ impl Register {
 
 /// A LoongArch parsed instruction argument
 #[derive(Debug)]
+#[allow(dead_code)] // LabelReference variant unused until parser supports PC-relative refs (P0-1)
 pub enum RawArg {
     // An immediate value or identifier
     Immediate {

@@ -1,8 +1,3 @@
-// FIXME remove this when implementation is complete
-#![allow(dead_code)]
-#![allow(unused_variables)]
-#![allow(unreachable_code)]
-
 use syn::parse;
 use proc_macro_error2::emit_error;
 
@@ -23,11 +18,13 @@ pub use debug::create_opmap;
 pub use debug::extract_opmap;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[allow(dead_code)] // LA32 variant unused until LA32 support is implemented (P3-5)
 pub enum LoongArchTarget {
     LA32,  // 32-bit LoongArch
     LA64   // 64-bit LoongArch
 }
 
+#[allow(dead_code)] // is_64_bit/is_32_bit unused until LA32 support is implemented (P3-5)
 impl LoongArchTarget {
     pub fn is_64_bit(&self) -> bool {
         match self {
@@ -44,6 +41,7 @@ impl LoongArchTarget {
 struct Context<'a, 'b: 'a> {
     pub state: &'a mut State<'b>,
     pub target: LoongArchTarget,
+    #[allow(dead_code)] // features field unused until parse_features is implemented (P0-4)
     pub features: loongarchdata::ExtensionFlags
 }
 
@@ -77,6 +75,7 @@ impl Arch for ArchLoongArch64 {
 }
 
 #[derive(Clone, Debug, Default)]
+#[allow(dead_code)] // ArchLoongArch32 unused until LA32 support is implemented (P3-5)
 pub struct ArchLoongArch32 {
     features: loongarchdata::ExtensionFlags
 }
@@ -131,14 +130,12 @@ fn compile_instruction_inner(ctx: &mut Context, input: parse::ParseStream) -> pa
 }
 
 fn handle_static_reloc_inner(stmts: &mut Vec<Stmt>, reloc: Jump, size: Size) {
-    let span = reloc.span();
-
     // TODO: Define proper LoongArch relocations
     stmts.push(Stmt::Const(0, size));
     stmts.push(reloc.encode(size.in_bytes(), size.in_bytes(), &[]));
 }
 
-fn parse_features(features: &[syn::Ident]) -> loongarchdata::ExtensionFlags {
+fn parse_features(_features: &[syn::Ident]) -> loongarchdata::ExtensionFlags {
     // TODO: Implement LoongArch feature parsing
     loongarchdata::ExtensionFlags::default()
 }
