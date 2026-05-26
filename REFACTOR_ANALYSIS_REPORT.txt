@@ -21,20 +21,15 @@ runtime/src/loongarch.rs                342    Assembler/Relocation/Register
 二、P0 — 功能缺失(会导致编译/运行错误)
 ================================================================
 
-P0-1: Parser不支持 [base, offset] 和 [base, labelref]
-  文件: parser.rs 第60-73行
-  现状: 解析[...]只提取base寄存器,offset丢弃
-    if input.peek(syn::token::Bracket) {
-        let inner; let _ = syn::bracketed!(inner in input);
-        let base = parse_reg(ctx, inner)?...;
-        return Ok(ast::RawArg::Reference { span, base, offset: None });
-    }
-  对比: RISC-V parser(108-147行)完整支持[base,offset]和[base,labelref]
-  影响:
-    - ld.d r4,[r3,16] -> 只解析[r3],offset 16丢失
-    - workaround: opmap用[R,R,Imm]替代[R,RefOffset],语法变裸参数
-    - [base,labelref]完全不可达,PC-relative load/store缺失
-  状态: ❌ 未完成
+P0-1: Parser支持 [base, offset] 和 offset(base) GAS语法       ✅ 已完成
+  文件: parser.rs
+  修复:
+    - [base, offset] 方括号语法: syn::bracketed! + parse_reg + optional offset expr
+    - offset(base) GAS语法: syn::Expr::Call 解构, 提取base寄存器+偏移值
+    - -offset(base) 负偏移量: is_negated标记 + extract_call辅助函数
+      从 Expr::Unary{Neg, Call{...}} 中提取内部Call,重构 Neg(Lit) 偏移表达式
+  注意: [base, labelref] (PC-relative) 仍不可达(P2-4待实现)
+  commit: cdeb67b14b48
 
 P0-2: Runtime缺少error函数                                         ✅ 已完成
   文件: runtime/src/loongarch.rs
@@ -44,12 +39,12 @@ P0-2: Runtime缺少error函数                                         ✅ 已�
     - invalid_register(u8)
   commit: 614c67ed5f4c
 
-P0-3: handle_static_reloc_inner占位实现
-  文件: mod.rs 第133-139行
-  现状: push(Stmt::Const(0,size)) + reloc.encode(...) -> 发出零值
-  对比: RISC-V正确计算偏移并编码
-  影响: 静态重定位产生错误指令
-  状态: ❌ 未完成
+P0-3: handle_static_reloc_inner占位实现                            ✅ 已完成
+  文件: mod.rs
+  修复: 实现 handle_static_reloc_inner, 添加 Size→Relocation 映射
+    - LITERAL8→LITERAL8, LITERAL16→LITERAL16, LITERAL32→LITERAL32, LITERAL64→LITERAL64
+    - 正确计算偏移并编码(之前全发零值)
+  commit: c12c37f17039
 
 P0-4: parse_features返回默认值
   文件: mod.rs 第141-144行
@@ -90,25 +85,31 @@ P2-1: matching.rs debug println遗留                                ✅ 已完�
   修复: 删除3处lu12i.w debug println + 清理注释println
   commit: 614c67ed5f4c
 
-P2-2: 全模块宽泛allow警告                                          ❌ 未完成
-  文件: mod.rs 第2-4行
-  现状: #![allow(dead_code)] #![allow(unused_variables)] #![allow(unreachable_code)]
-  影响: 无法发现未使用代码和逻辑错误
+P2-2: 全模块宽泛allow警告                                          ✅ 已完成
+  文件: mod.rs
+  修复: 移除 #![allow(dead_code)], #![allow(unused_variables)], #![allow(unreachable_code)]
+    改为逐项 #[allow(dead_code)] + 注释说明原因
+    - ImmediateEncoder::new 显式生命周期返回
+    - gather_fields 不可达代码移除
+    - Command 枚举 allow (宏构造变体)
+  commit: 6ab6c28be228
 
-P2-3: sanitize_register被注释掉                                    ❌ 未完成
-  文件: matching.rs 第84-89行
-  现状: r0不能作为目标的检查被注释掉
-  影响: 写入r0(zero)不报错
+P2-3: sanitize_register被注释掉                                    ✅ 已完成
+  文件: matching.rs
+  修复: 恢复sanitize_register,添加注释说明LoongArch r0作目标合法
+    (如 addi.d $zero, rj, 0 为NOP),全局禁止过于激进
+  commit: 6ab6c28be228
 
 P2-4: LabelReference类型定义但parser从不产生                        ❌ 未完成
   文件: ast.rs 第158-162行, matching.rs 第136行
   现状: matching.rs第192行 unreachable!("Label references not supported")
   影响: PC-relative内存引用完全不可达
 
-P2-5: RefOffset/RefLabel未被opmap使用                              ❌ 未完成
-  现状: load/store全用[R,R,Imm]/[R,R,Offset]
-  原因: parser不支持[base,offset]的workaround
-  影响: 语法不一致(ld.d r4,r3,16 vs ld.d r4,[r3,16])
+P2-5: RefOffset未被opmap使用                                      ✅ 已完成
+  修复: Go生成器 addRefOffsetVariants 为36条 load/store/fld/fst/preld
+    指令添加 [R, RefOffset] / [F, RefOffset] 变体
+  RHS使用 SImm(10,12) (数值偏移编码),而非 Offset(SI12) (标签重定位)
+  commit: cdeb67b14b48
 
 P2-6: loongarchdata.rs中文注释                                      ❌ 未完成
   文件: loongarchdata.rs 第92行
@@ -127,17 +128,15 @@ P2-8: 旧版SingleOp宏被注释未清理                                    ❌
 五、P3 — 需补全的功能
 ================================================================
 
-P3-1: Runtime PC32 relocation panic                                ❌ 未完成
-  文件: runtime/src/loongarch.rs 第43,101,176行
-  玀状: op_mask/encode/read_value全部panic!("unimplemented")
-  影响: 32位PC-relative重定位不可用
+P3-1: Runtime PC32 relocation panic                                ✅ 已完成
+  文件: runtime/src/loongarch.rs
+  修复: PC32 在 op_mask/encode/read_value 的完整实现(32位有符号直接读写)
+  commit: c12c37f17039
 
-P3-2: Runtime寄存器枚举不完整                                      ❌ 未完成
-  玀状: 只有R(GR)和RV(向量),缺少:
-    - FR(F0-F31) 浮点
-    - FCCR(FCC0-FCC7) 条件标志
-    - FCSR(0-3) 控制寄存器编号
-    - XR(X0-X31) LASX 256-bit向量
+P3-2: Runtime寄存器枚举不完整                                      ✅ 已完成
+  修复: 新增 FR(F0-F31), FCCR(FCC0-FCC7), FCSR(FCSR0-FCSR3), XR(X0-X31)
+    枚举并实现 reg_impls! 宏
+  commit: accf591129e4
 
 P3-3: Rno0动态检查                                                 ✅ 已完成
   修复: compiler.rs aarch64→loongarch::invalid_register
@@ -150,29 +149,19 @@ P3-5: LoongArch32目标未实现功能                                     ❌ �
   文件: mod.rs 第80-106行
   玀状: LA32/LA64指令差异未处理
 
-P3-6: RegFamily缺少LSX/LASX区分                                    ❌ 未完成
-  文件: ast.rs 第62-68行, parser.rs 第216-222行
-  玀状: VECTOR同时被LSX/LASX使用,只注册V无X
-  影响: X(expr)动态选择LASX寄存器不可用
+P3-6: RegFamily缺少LSX/LASX区分                                    ✅ 已完成
+  修复: 拆分 VECTOR 为 LSX(2)+LASX(5), 新增 X0-X31 (0x60-0x7F)
+    parser注册 x0-x31 别名, Matcher::X 匹配 LSX|LASX
+  commit: 2da4856b2060
 
 ================================================================
 六、新发现问题
 ================================================================
 
-NEW-1: bf-jit add_imm!/sub_imm!宏52位分支有符号编码bug
-  文件: doc/examples/bf-jit/src/loongarch64.rs 第105-113行
-  现状: add_imm!宏在52位分支中:
-    let high20 = (($imm >> 32) & 0xFFFFF) as i32;
-    // lu12i.w $rt, high20  -- SImm(5,20)需要有符号值
-  问题: ($imm >> 32) & 0xFFFFF 产生无符号20位值(最大0xFFFFF=1048575)
-        但 lu12i.w SImm(5,20) 合法范围是 [-524288, 524287]
-        0xFFFFF=1048575 远超有符号范围上限524287
-  暴露原因: P1-5恢复了SImm的dynamic_range_check_signed,
-           此前该check被注释掉所以bug被隐藏
-  影响: cargo test从workspace root有2个测试失败:
-        test_add_imm (Immediate 1048575 out of range)
-        test_sub_imm (Immediate 524288 out of range)
-  状态: ❌ 待修复
+NEW-1: bf-jit add_imm!/sub_imm!宏52位分支有符号编码bug              ✅ 已完成
+  文件: doc/examples/bf-jit/src/loongarch64.rs
+  修复: lu12i.w/lu32i.d/lu52i.d 立即数有符号编码
+  commit: c9d242f6534e
 
 ================================================================
 七、遗留问题：是否应提供add_imm等便利宏给用户
@@ -213,12 +202,12 @@ P1-5 ──> NEW-1 (恢复range check暴露了bf-jit bug)
 
 序号  组合               工作量  状态    说明
  1    P0-2+P1-1~5+P2-1  小      ✅      runtime error函数+跨架构引用+变量名+range check
- 1a   NEW-1              小      ❌      bf-jit add_imm!有符号编码bug
- 2    P0-1+P2-5+P2-4    中      ❌      parser[base,offset]+修正opmap+使LabelReference可达
- 3    P2-2~3+P2-6~8     小      ❌      代码清理:allow/sanitize/注释/旧代码
- 4    P3-1+P0-3         中      ❌      PC32 relocation+static_reloc正确逻辑
- 5    P0-4+P2-7         中      ❌      parse_features+SingleOp宏修正
- 6    P3-2+P3-6         小      ❌      runtime寄存器枚举+parser X family
+ 1a   NEW-1              小      ✅      bf-jit add_imm!有符号编码bug
+ 2    P0-1+P2-5          中      ✅      parser [base,offset]+GAS语法+opmap RefOffset变体
+ 3    P2-2~3+P2-6~8     小      部分✅  P2-2,P2-3已完成; P2-6~8待做
+ 4    P3-1+P0-3         中      ✅      PC32 relocation+static_reloc正确逻辑
+ 5    P0-4+P2-7         中      ❌      parse_features+SingleOp宏修正(暂缓)
+ 6    P3-2+P3-6         小      ✅      runtime寄存器枚举+parser X/LASX family
  7    P3-4              中      ❌      伪指令支持
  8    P3-5              中      ❌      LA32目标
 
