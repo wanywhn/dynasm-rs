@@ -204,12 +204,10 @@ pub enum Relocation {
     // Same alignment requirement as B16.
     B26 = 2,
 
-    // 20-bit signed immediate.
-    // Used by lu12i.w, lu32i.d, pcaddi, pcaddu12i.
-    // These are compile-time immediates (not runtime label relocations).
-    // Per LoongArch manual: the 20-bit si20 is sign-extended and written
-    // to the register field (with 12 trailing zeros for lu12i/pcaddu12i).
-    // The compiler encodes the raw si20 value into bits [24:5] (shift=0).
+    // Raw 20-bit si20 field (no shift in encode).
+    // Used by lu12i.w, lu32i.d for compile-time immediates.
+    // The value is expected to be the already-shifted si20; the runtime
+    // stores it directly into bits [24:5] without any shift.
     ABS_HI20 = 4,
     // 14-bit offset, 2-bit aligned (branch with register offset)
     // Used by ll.w, sc.w, ll.d, sc.d, ldptr.w, stptr.w, ldptr.d, stptr.d.
@@ -226,6 +224,12 @@ pub enum Relocation {
     //   pcalau12i $t0, :pc label   → PCALA_HI20 + PCALA_LO12
     //   addi.d    $t0, $t0, :lo label
     PCALA_HI20 = 13,
+    // pcaddi: PC + SE({si20, 2'b0}). Encode shift >>2, no compensation.
+    PCADD_SHIFT2 = 14,
+    // pcaddu12i: PC + SE({si20, 12'b0}). Encode shift >>12, +0x800 compensation.
+    PCADD_SHIFT12 = 15,
+    // pcaddu18i: PC + SE({si20, 18'b0}). Encode shift >>18, +0x20000 compensation.
+    PCADD_SHIFT18 = 16,
     // 8-bit literal
     LITERAL8 = 9,
     // 16-bit literal
@@ -252,6 +256,9 @@ impl Relocation {
         (7, "SI12"),
         (8, "PCALA_LO12"),
         (13, "PCALA_HI20"),
+        (14, "PCADD_SHIFT2"),
+        (15, "PCADD_SHIFT12"),
+        (16, "PCADD_SHIFT18"),
         (9, "LITERAL8"),
         (10, "LITERAL16"),
         (11, "LITERAL32"),
@@ -274,7 +281,10 @@ impl Relocation {
             | Relocation::SI14
             | Relocation::SI12
             | Relocation::PCALA_LO12
-            | Relocation::PCALA_HI20 => 4,
+            | Relocation::PCALA_HI20
+            | Relocation::PCADD_SHIFT2
+            | Relocation::PCADD_SHIFT12
+            | Relocation::PCADD_SHIFT18 => 4,
             Relocation::LITERAL64 => 8,
         }
     }

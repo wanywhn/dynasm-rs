@@ -225,6 +225,18 @@ Command::SImm(offset, bitlen) => {
                                         let arr = &[5, 20];
                                         fun_name(&mut statics, &mut dynamics, value, arr, 0)?;
                                     },
+                                    Relocation::PCADD_SHIFT2 => {
+                                        let arr = &[5, 20];
+                                        fun_name(&mut statics, &mut dynamics, value, arr, 2)?;
+                                    },
+                                    Relocation::PCADD_SHIFT12 => {
+                                        let arr = &[5, 20];
+                                        fun_name(&mut statics, &mut dynamics, value, arr, 12)?;
+                                    },
+                                    Relocation::PCADD_SHIFT18 => {
+                                        let arr = &[5, 20];
+                                        fun_name(&mut statics, &mut dynamics, value, arr, 18)?;
+                                    },
                                     Relocation::SI14 => {
                                         let arr = &[10, 14];
                                         fun_name(&mut statics, &mut dynamics, value, arr, 2)?;
@@ -236,7 +248,7 @@ Command::SImm(offset, bitlen) => {
                                     Relocation::PCALA_HI20 => {
                                         // pcalau12i high 20 bits: bits [31:12] of offset, placed at [24:5]
                                         let arr = &[5, 20];
-                                        fun_name(&mut statics, &mut dynamics, value, arr, 0)?;
+                                        fun_name(&mut statics, &mut dynamics, value, arr, 12)?;
                                     },
                                 }
 

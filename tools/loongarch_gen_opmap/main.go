@@ -140,6 +140,24 @@ func generateOpmapFile(path string, insns []InsnDescription) error {
 		shouldSkip := false
 		// 检查是否需要显示原始名称
 		showOrigName := false
+		// Sort: Imm formats before Offset formats, so matcher prefers Imm for raw integers
+		sort.SliceStable(group, func(i, j int) bool {
+			hasOffsetI := false
+			for _, a := range group[i].Format.Args {
+				if a.Kind == ArgKindOffsetSI20 || a.Kind == ArgKindOffsetSI12 || a.Kind == ArgKindOffsetSI14 || a.Kind == ArgKindOffsetSI16 || a.Kind == ArgKindOffsetSI26 {
+					hasOffsetI = true
+					break
+				}
+			}
+			hasOffsetJ := false
+			for _, a := range group[j].Format.Args {
+				if a.Kind == ArgKindOffsetSI20 || a.Kind == ArgKindOffsetSI12 || a.Kind == ArgKindOffsetSI14 || a.Kind == ArgKindOffsetSI16 || a.Kind == ArgKindOffsetSI26 {
+					hasOffsetJ = true
+					break
+				}
+			}
+			return !hasOffsetI && hasOffsetJ
+		})
 		for _, insn := range group {
 			if _, ok := insn.Attribs["lbt"]; ok {
 				shouldSkip = true
@@ -786,6 +804,14 @@ func argToProcessor(mnemonic string, idx int, arg *Arg) string {
 		} else if mnemonic == "beqz" || mnemonic == "bnez" ||
 			mnemonic == "bceqz" || mnemonic == "bcnez" {
 			return "Offset(B21)"
+		} else if mnemonic == "pcaddi" {
+			return "Offset(PCADD_SHIFT2)"
+		} else if mnemonic == "pcaddu12i" {
+			return "Offset(PCADD_SHIFT12)"
+		} else if mnemonic == "pcaddu18i" {
+			return "Offset(PCADD_SHIFT18)"
+		} else if mnemonic == "pcalau12i" {
+			return "Offset(PCALA_HI20)"
 		}
 		return "Offset(ABS_HI20)"
 	case ArgKindOffsetSI14:

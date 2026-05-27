@@ -23,13 +23,10 @@ pub enum LoongArchRelocation {
     // 26-bit offset, 2-bit aligned. Same alignment rationale as B16.
     B26,
 
-    // 20-bit signed immediate (compile-time only).
-    // Used by lu12i.w, lu32i.d, pcaddi, pcaddu12i.
-    // Per LoongArch manual: si20 is sign-extended; for lu12i/pcaddu12i it
-    // is concatenated with 12 trailing zeros. This relocation is NOT used
-    // for label resolution — the compiler encodes si20 directly into
-    // bits [24:5] at compile time. The runtime encode/read_value path
-    // exists only for testing/debugging.
+    // Raw 20-bit si20 field (no shift in encode).
+    // Used by lu12i.w, lu32i.d for compile-time immediates.
+    // The value is expected to be the already-shifted si20; the runtime
+    // stores it directly into bits [24:5] without any shift.
     ABS_HI20,
     // 14-bit offset, 2-bit aligned
     // Used by ll.w, sc.w, ll.d, sc.d, ldptr.w, stptr.w, ldptr.d, stptr.d.
@@ -45,6 +42,12 @@ pub enum LoongArchRelocation {
     // (label_addr - instruction_pc), placed at instruction bits [24:5].
     // Paired with PCALA_LO12 to form a full 32-bit PC-relative address.
     PCALA_HI20,
+    // pcaddi: PC + SE({si20, 2'b0}). Encode shift >>2, no compensation.
+    PCADD_SHIFT2,
+    // pcaddu12i: PC + SE({si20, 12'b0}). Encode shift >>12, +0x800 compensation.
+    PCADD_SHIFT12,
+    // pcaddu18i: PC + SE({si20, 18'b0}). Encode shift >>18, +0x20000 compensation.
+    PCADD_SHIFT18,
     Plain(RelocationSize),
 }
 
@@ -55,6 +58,9 @@ impl LoongArchRelocation {
             Self::B21 => 0xFC00_03E0,
             Self::B26 => 0xFC00_0000,
             Self::ABS_HI20 => 0xFE00_001F,
+            Self::PCADD_SHIFT2 => 0xFE00_001F,
+            Self::PCADD_SHIFT12 => 0xFE00_001F,
+            Self::PCADD_SHIFT18 => 0xFE00_001F,
             Self::SI14 => 0xFF00_03FF,
             Self::SI12 => 0xFFC0_03FF,
             Self::PCALA_LO12 => 0xFFC0_03FF,
@@ -90,7 +96,32 @@ impl LoongArchRelocation {
                 if !fits_signed_bitfield(value, 20) {
                     return Err(ImpossibleRelocation { } );
                 }
-                ((value >> 2) as u32  & 0xF_FFFF) << 5
+                ((value as u32) & 0xF_FFFF) << 5
+            },
+            Self::PCADD_SHIFT2 => {
+                // pcaddi: PC + SE({si20, 2'b0}). No compensation.
+                if !fits_signed_bitfield(value >> 2, 20) {
+                    return Err(ImpossibleRelocation {});
+                }
+                ((value >> 2) as u32 & 0xF_FFFF) << 5
+            },
+            Self::PCADD_SHIFT12 => {
+                // pcaddu12i: PC + SE({si20, 12'b0}). +0x800 compensation
+                // to handle sign-extension of the paired lo12.
+                let value = value + 0x800;
+                if !fits_signed_bitfield(value >> 12, 20) {
+                    return Err(ImpossibleRelocation {});
+                }
+                ((value >> 12) as u32 & 0xF_FFFF) << 5
+            },
+            Self::PCADD_SHIFT18 => {
+                // pcaddu18i: PC + SE({si20, 18'b0}). +0x20000 compensation
+                // to handle sign-extension of the paired lo18.
+                let value = value + 0x20000;
+                if !fits_signed_bitfield(value >> 18, 20) {
+                    return Err(ImpossibleRelocation {});
+                }
+                ((value >> 18) as u32 & 0xF_FFFF) << 5
             },
             Self::SI14 => {
                 if value & 3 != 0 || !fits_signed_bitfield(value >> 2, 14) {
@@ -115,7 +146,8 @@ impl LoongArchRelocation {
             },
             Self::PCALA_HI20 => {
                 // PC-relative high 20 bits for pcalau12i.
-                // bits [31:12] of (label - pc), placed at instruction bits [24:5].
+                // +0x800 compensation for sign-extension of paired lo12.
+                let value = value + 0x800;
                 if !fits_signed_bitfield(value >> 12, 20) {
                     return Err(ImpossibleRelocation {});
                 }
@@ -138,6 +170,9 @@ impl Relocation for LoongArchRelocation {
             7 => Self::SI12,
             8 => Self::PCALA_LO12,
             13 => Self::PCALA_HI20,
+            14 => Self::PCADD_SHIFT2,
+            15 => Self::PCADD_SHIFT12,
+            16 => Self::PCADD_SHIFT18,
             9 => Self::Plain(RelocationSize::from_encoding(9)),
             10 => Self::Plain(RelocationSize::from_encoding(10)),
             11 => Self::Plain(RelocationSize::from_encoding(11)),
@@ -189,6 +224,15 @@ impl Relocation for LoongArchRelocation {
             Self::ABS_HI20 => u64::from(
                 (value & mask) >> 5
             ),
+            Self::PCADD_SHIFT2 => u64::from(
+                (value & mask) >> 5
+            ) << 2,
+            Self::PCADD_SHIFT12 => u64::from(
+                (value & mask) >> 5
+            ) << 12,
+            Self::PCADD_SHIFT18 => u64::from(
+                (value & mask) >> 5
+            ) << 18,
             Self::SI14 => u64::from(
                 (value & mask) >> 10
             ) << 1,
@@ -198,7 +242,9 @@ impl Relocation for LoongArchRelocation {
             Self::PCALA_LO12 => u64::from(
                 (value & mask) >> 10
             ),
-            Self::PCALA_HI20 => u64::from((value & mask) >> 10),
+            Self::PCALA_HI20 => u64::from(
+                (value & mask) >> 5
+            ) << 12,
             Self::Plain(_) => unreachable!(),
         };
 
@@ -208,10 +254,13 @@ impl Relocation for LoongArchRelocation {
             Self::B21 => 21,
             Self::B26 => 26,
             Self::ABS_HI20 => 20,
+            Self::PCADD_SHIFT2 => 22,
+            Self::PCADD_SHIFT12 => 32,
+            Self::PCADD_SHIFT18 => 38,
             Self::SI14 => 14,
             Self::SI12 => 12,
             Self::PCALA_LO12 => 12,
-            Self::PCALA_HI20 => 12,
+            Self::PCALA_HI20 => 32,
             Self::Plain(_) => unreachable!(),
         };
         let offset = 1u64 << (bits - 1);
@@ -366,6 +415,9 @@ mod tests {
         (7, || LoongArchRelocation::SI12),
         (8, || LoongArchRelocation::PCALA_LO12),
         (13, || LoongArchRelocation::PCALA_HI20),
+        (14, || LoongArchRelocation::PCADD_SHIFT2),
+        (15, || LoongArchRelocation::PCADD_SHIFT12),
+        (16, || LoongArchRelocation::PCADD_SHIFT18),
     ];
 
     #[test]
@@ -449,5 +501,114 @@ mod tests {
                 assert!(s.contains("LoongArch"), "Error message should reference LoongArch, got: {s}");
             }
         }
+    }
+
+    // --- Relocation encode/read_value correctness tests ---
+    //
+    // Each PC-relative instruction now has its own relocation variant
+    // with the correct shift and compensation:
+    //   PCADD_SHIFT2:  pcaddi     — >>2, no compensation
+    //   PCADD_SHIFT12: pcaddu12i  — >>12, +0x800 compensation
+    //   PCADD_SHIFT18: pcaddu18i  — >>18, +0x20000 compensation
+    //   PCALA_HI20:    pcalau12i  — >>12, +0x800 compensation
+    //   ABS_HI20:      raw si20   — no shift (compile-time immediate)
+
+    /// ABS_HI20 (raw si20, no shift): encode stores value directly into si20 field.
+    #[test]
+    fn test_abs_hi20_raw_si20_no_shift() {
+        let reloc = LoongArchRelocation::ABS_HI20;
+        let value: isize = 0x12345; // raw si20 value
+        let encoded = reloc.encode(value).unwrap();
+        let si20 = (encoded >> 5) & 0xF_FFFF;
+        assert_eq!(si20, 0x12345, "ABS_HI20 should store raw si20 (no shift)");
+        // roundtrip: read_value returns raw si20 sign-extended
+        let mut buf = [0u8; 4];
+        reloc.write_value(&mut buf, value).unwrap();
+        let recovered = reloc.read_value(&buf);
+        assert_eq!(recovered, value, "ABS_HI20 roundtrip should recover raw si20");
+    }
+
+    /// PCADD_SHIFT2 (pcaddi, >>2, no compensation): encode shifts value >> 2.
+    #[test]
+    fn test_pcadd_shift2_encode_and_roundtrip() {
+        let reloc = LoongArchRelocation::PCADD_SHIFT2;
+        // value = 0x3FFFC: si20 = 0xFFFF, pcaddi computes PC + 0xFFFF<<2 = PC + 0x3FFFC
+        let value: isize = 0x3FFFC;
+        let encoded = reloc.encode(value).unwrap();
+        let si20 = (encoded >> 5) & 0xF_FFFF;
+        assert_eq!(si20, 0xFFFF, "PCADD_SHIFT2 si20 should be value>>2");
+        // roundtrip: read_value applies inverse shift <<2
+        let mut buf = [0u8; 4];
+        reloc.write_value(&mut buf, value).unwrap();
+        let recovered = reloc.read_value(&buf);
+        assert_eq!(recovered, value, "PCADD_SHIFT2 roundtrip should recover original offset");
+    }
+
+    /// PCADD_SHIFT12 (pcaddu12i, >>12, +0x800 compensation).
+    #[test]
+    fn test_pcadd_shift12_encode_with_compensation() {
+        let reloc = LoongArchRelocation::PCADD_SHIFT12;
+        // value = 0x12345_000: si20 should be ((value + 0x800) >> 12) & 0xF_FFFF
+        let value: isize = 0x12345_000;
+        let encoded = reloc.encode(value).unwrap();
+        let si20 = (encoded >> 5) & 0xF_FFFF;
+        // (0x12345_000 + 0x800) >> 12 = 0x12345_800 >> 12 = 0x12346 (carry from +0x800)
+        // Wait, 0x12345_800 >> 12 = 0x12346 (with lo12 causing carry into hi20)
+        let expected_si20: u32 = (((value as i64 + 0x800) >> 12) as u32) & 0xF_FFFF;
+        assert_eq!(si20, expected_si20,
+            "PCADD_SHIFT12 si20 should be (value+0x800)>>12 = 0x{:X}", expected_si20);
+    }
+
+    /// PCADD_SHIFT12 with a value where lo12 is positive (no carry into hi20).
+    #[test]
+    fn test_pcadd_shift12_no_carry_when_lo12_positive() {
+        let reloc = LoongArchRelocation::PCADD_SHIFT12;
+        // value = 0x1000: lo12 = 0 (positive), +0x800 >> 12 = 0x1800 >> 12 = 1
+        let value: isize = 0x1000;
+        let encoded = reloc.encode(value).unwrap();
+        let si20 = (encoded >> 5) & 0xF_FFFF;
+        // (0x1000 + 0x800) >> 12 = 0x1800 >> 12 = 1
+        assert_eq!(si20, 1, "PCADD_SHIFT12: value=0x1000, si20=1");
+    }
+
+    /// PCADD_SHIFT18 (pcaddu18i, >>18, +0x20000 compensation).
+    #[test]
+    fn test_pcadd_shift18_encode_with_compensation() {
+        let reloc = LoongArchRelocation::PCADD_SHIFT18;
+        // Use a value where >>18 fits in 20-bit: value = 0x40000
+        // (0x40000 + 0x20000) >> 18 = 0x60000 >> 18 = 3
+        let value: isize = 0x40000;
+        let encoded = reloc.encode(value).unwrap();
+        let si20 = (encoded >> 5) & 0xF_FFFF;
+        let expected_si20: u32 = (((value as i64 + 0x20000) >> 18) as u32) & 0xF_FFFF;
+        assert_eq!(si20, expected_si20,
+            "PCADD_SHIFT18 si20 should be (value+0x20000)>>18 = 0x{:X}", expected_si20);
+    }
+
+    /// PCALA_HI20 (pcalau12i, >>12, +0x800 compensation) — now with compensation.
+    #[test]
+    fn test_pcala_hi20_encode_with_compensation() {
+        let reloc = LoongArchRelocation::PCALA_HI20;
+        // value = 0x12345_000: si20 = ((value + 0x800) >> 12) & 0xF_FFFF
+        let value: isize = 0x12345_000;
+        let encoded = reloc.encode(value).unwrap();
+        let si20 = (encoded >> 5) & 0xF_FFFF;
+        let expected_si20: u32 = (((value as i64 + 0x800) >> 12) as u32) & 0xF_FFFF;
+        assert_eq!(si20, expected_si20,
+            "PCALA_HI20 si20 should include +0x800 compensation");
+    }
+
+    /// PCALA_HI20 roundtrip: read_value applies <<12 inverse shift.
+    #[test]
+    fn test_pcala_hi20_roundtrip() {
+        let reloc = LoongArchRelocation::PCALA_HI20;
+        let value: isize = 0x1000;
+        let mut buf = [0u8; 4];
+        reloc.write_value(&mut buf, value).unwrap();
+        let recovered = reloc.read_value(&buf);
+        // read_value reconstructs si20 << 12 (with compensation baked in)
+        // si20 = (0x1000 + 0x800) >> 12 = 1, so recovered = 1 << 12 = 0x1000
+        assert_eq!(recovered, value,
+            "PCALA_HI20 roundtrip should recover offset (with compensation)");
     }
 }
