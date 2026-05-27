@@ -212,9 +212,8 @@ pub enum Relocation {
     // The compiler encodes the raw si20 value into bits [24:5] (shift=0).
     ABS_HI20 = 4,
     // 14-bit offset, 2-bit aligned (branch with register offset)
+    // Used by ll.w, sc.w, ll.d, sc.d, ldptr.w, stptr.w, ldptr.d, stptr.d.
     SI14 = 5,
-    // 16-bit offset, 2-bit aligned
-    SI16 = 6,
     // 12-bit signed offset (used by load/store with register + offset syntax)
     SI12 = 7,
     // PC-relative low 12 bits.
@@ -250,7 +249,6 @@ impl Relocation {
         (2, "B26"),
         (4, "ABS_HI20"),
         (5, "SI14"),
-        (6, "SI16"),
         (7, "SI12"),
         (8, "PCALA_LO12"),
         (13, "PCALA_HI20"),
@@ -274,7 +272,6 @@ impl Relocation {
             | Relocation::LITERAL32
             | Relocation::ABS_HI20
             | Relocation::SI14
-            | Relocation::SI16
             | Relocation::SI12
             | Relocation::PCALA_LO12
             | Relocation::PCALA_HI20 => 4,

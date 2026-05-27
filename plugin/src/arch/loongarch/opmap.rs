@@ -267,7 +267,7 @@ Ops!(
 ]
 
 "beq" = [
-    Single(0b01011000_00000000_00000000_00000000) , [R, R, Offset] => [R(5), R(0), Offset(SI16)];
+    Single(0b01011000_00000000_00000000_00000000) , [R, R, Offset] => [R(5), R(0), Offset(B16)];
     Single(0b01011000_00000000_00000000_00000000) , [R, R, Imm] => [R(5), R(0), Sscaled(10, 16, 2)];
     Single(0b01011000_00000000_00000000_00000000) , [R, RefOffset] => [R(5), R(5), SImm(10, 12)];
     Single(0b01011000_00000000_00000000_00000000) , [R, RefLabel] => [R(5), R(5), Offset(PCALA_LO12)];
@@ -282,7 +282,7 @@ Ops!(
 
 "blt" = [
     // orig_name: blt
-    Single(0b01100000_00000000_00000000_00000000) , [R, R, Offset] => [R(5), R(0), Offset(SI16)];
+    Single(0b01100000_00000000_00000000_00000000) , [R, R, Offset] => [R(5), R(0), Offset(B16)];
     // orig_name: blt
     Single(0b01100000_00000000_00000000_00000000) , [R, R, Imm] => [R(5), R(0), Sscaled(10, 16, 2)];
     // orig_name: blt
@@ -293,7 +293,7 @@ Ops!(
 
 "bltu" = [
     // orig_name: bltu
-    Single(0b01101000_00000000_00000000_00000000) , [R, R, Offset] => [R(5), R(0), Offset(SI16)];
+    Single(0b01101000_00000000_00000000_00000000) , [R, R, Offset] => [R(5), R(0), Offset(B16)];
     // orig_name: bltu
     Single(0b01101000_00000000_00000000_00000000) , [R, R, Imm] => [R(5), R(0), Sscaled(10, 16, 2)];
     // orig_name: bltu
@@ -309,7 +309,7 @@ Ops!(
 
 "bge" = [
     // orig_name: bge
-    Single(0b01100100_00000000_00000000_00000000) , [R, R, Offset] => [R(5), R(0), Offset(SI16)];
+    Single(0b01100100_00000000_00000000_00000000) , [R, R, Offset] => [R(5), R(0), Offset(B16)];
     // orig_name: bge
     Single(0b01100100_00000000_00000000_00000000) , [R, R, Imm] => [R(5), R(0), Sscaled(10, 16, 2)];
     // orig_name: bge
@@ -320,7 +320,7 @@ Ops!(
 
 "bgeu" = [
     // orig_name: bgeu
-    Single(0b01101100_00000000_00000000_00000000) , [R, R, Offset] => [R(5), R(0), Offset(SI16)];
+    Single(0b01101100_00000000_00000000_00000000) , [R, R, Offset] => [R(5), R(0), Offset(B16)];
     // orig_name: bgeu
     Single(0b01101100_00000000_00000000_00000000) , [R, R, Imm] => [R(5), R(0), Sscaled(10, 16, 2)];
     // orig_name: bgeu
@@ -330,7 +330,7 @@ Ops!(
 ]
 
 "bne" = [
-    Single(0b01011100_00000000_00000000_00000000) , [R, R, Offset] => [R(5), R(0), Offset(SI16)];
+    Single(0b01011100_00000000_00000000_00000000) , [R, R, Offset] => [R(5), R(0), Offset(B16)];
     Single(0b01011100_00000000_00000000_00000000) , [R, R, Imm] => [R(5), R(0), Sscaled(10, 16, 2)];
     Single(0b01011100_00000000_00000000_00000000) , [R, RefOffset] => [R(5), R(5), SImm(10, 12)];
     Single(0b01011100_00000000_00000000_00000000) , [R, RefLabel] => [R(5), R(5), Offset(PCALA_LO12)];
@@ -1133,7 +1133,7 @@ Ops!(
 ]
 
 "jirl" = [
-    Single(0b01001100_00000000_00000000_00000000) , [R, R, Offset] => [R(0), R(5), Offset(SI16)];
+    Single(0b01001100_00000000_00000000_00000000) , [R, R, Offset] => [R(0), R(5), Offset(B16)];
     Single(0b01001100_00000000_00000000_00000000) , [R, R, Imm] => [R(0), R(5), Sscaled(10, 16, 2)];
     Single(0b01001100_00000000_00000000_00000000) , [R, RefOffset] => [R(0), R(5), SImm(10, 12)];
     Single(0b01001100_00000000_00000000_00000000) , [R, RefLabel] => [R(0), R(5), Offset(PCALA_LO12)];

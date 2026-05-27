@@ -32,9 +32,8 @@ pub enum LoongArchRelocation {
     // exists only for testing/debugging.
     ABS_HI20,
     // 14-bit offset, 2-bit aligned
+    // Used by ll.w, sc.w, ll.d, sc.d, ldptr.w, stptr.w, ldptr.d, stptr.d.
     SI14,
-    // 16-bit offset, 2-bit aligned
-    SI16,
     // 12-bit signed offset (used by load/store with register + offset syntax)
     SI12,
     // PC-relative low 12 bits for load instructions.
@@ -57,7 +56,6 @@ impl LoongArchRelocation {
             Self::B26 => 0xFC00_0000,
             Self::ABS_HI20 => 0xFE00_001F,
             Self::SI14 => 0xFF00_03FF,
-            Self::SI16 => 0xFC00_03FF,
             Self::SI12 => 0xFFC0_03FF,
             Self::PCALA_LO12 => 0xFFC0_03FF,
             Self::PCALA_HI20 => 0xFE00_001F,
@@ -101,13 +99,6 @@ impl LoongArchRelocation {
                 let value = (value >> 2) as u32;
                 (value & 0x3FFF) << 10
             },
-            Self::SI16 => {
-                if value & 3 != 0 || !fits_signed_bitfield(value >> 2, 16) {
-                    return Err(ImpossibleRelocation { } );
-                }
-                let value = (value >> 2) as u32;
-                (value as u32 & 0xFFFF) << 10
-            },
             Self::SI12 => {
                 if !fits_signed_bitfield(value, 12) {
                     return Err(ImpossibleRelocation { } );
@@ -144,8 +135,7 @@ impl Relocation for LoongArchRelocation {
             2 => Self::B26,
             4 => Self::ABS_HI20,
         5 => Self::SI14,
-        6 => Self::SI16,
-7 => Self::SI12,
+            7 => Self::SI12,
             8 => Self::PCALA_LO12,
             13 => Self::PCALA_HI20,
             9 => Self::Plain(RelocationSize::from_encoding(9)),
@@ -202,9 +192,6 @@ impl Relocation for LoongArchRelocation {
             Self::SI14 => u64::from(
                 (value & mask) >> 10
             ) << 1,
-            Self::SI16 => u64::from(
-                (value & mask) >> 10
-            ),
             Self::SI12 => u64::from(
                 (value & mask) >> 10
             ),
@@ -222,7 +209,6 @@ impl Relocation for LoongArchRelocation {
             Self::B26 => 26,
             Self::ABS_HI20 => 20,
             Self::SI14 => 14,
-            Self::SI16 => 16,
             Self::SI12 => 12,
             Self::PCALA_LO12 => 12,
             Self::PCALA_HI20 => 12,
@@ -376,7 +362,7 @@ mod tests {
         (2, || LoongArchRelocation::B26),
         (4, || LoongArchRelocation::ABS_HI20),
         (5, || LoongArchRelocation::SI14),
-        (6, || LoongArchRelocation::SI16),
+        (6, || LoongArchRelocation::B16),  // SI16 merged into B16 (identical encoding)
         (7, || LoongArchRelocation::SI12),
         (8, || LoongArchRelocation::PCALA_LO12),
         (13, || LoongArchRelocation::PCALA_LO12),

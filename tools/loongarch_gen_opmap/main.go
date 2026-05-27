@@ -793,7 +793,7 @@ func argToProcessor(mnemonic string, idx int, arg *Arg) string {
 	case ArgKindOffsetSI12:
 		return "Offset(SI12)"
 	case ArgKindOffsetSI16:
-		return "Offset(SI16)"
+		return "Offset(B16)"
 	case ArgKindOffsetSI26:
 		return "Offset(B26)"
 	default:

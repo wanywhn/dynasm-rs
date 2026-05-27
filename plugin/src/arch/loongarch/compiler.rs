@@ -238,10 +238,6 @@ Command::SImm(offset, bitlen) => {
                                         let arr = &[5, 20];
                                         fun_name(&mut statics, &mut dynamics, value, arr, 0)?;
                                     },
-                                    Relocation::SI16 => {
-                                        let arr = &[10, 16];
-                                        fun_name(&mut statics, &mut dynamics, value, arr, 2)?;
-                                    },
                                 }
 
                             },
