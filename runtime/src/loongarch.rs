@@ -31,6 +31,10 @@ pub enum LoongArchRelocation {
     SI16,
     // 12-bit offset,
     SI12,
+    // PC-relative low 12 bits for load instructions (signed)
+    PCLO12,
+    // PC-relative low 12 bits for store instructions (signed)
+    PCLO12S,
     Plain(RelocationSize),
 }
 
@@ -47,7 +51,9 @@ impl LoongArchRelocation {
             Self::SI14 => 0xFF00_03FF,
             Self::SI16 => 0xFC00_03FF,
             Self::SI12 => 0xFFC0_03FF,
-            Self::Plain(_) => 0
+            Self::PCLO12 => 0xFFC0_03FF,
+            Self::PCLO12S => 0xFFC0_03FF,
+            Self::Plain(_) => 0,
         }
     }
     fn encode(&self, value: isize) -> Result<u32, ImpossibleRelocation> {
@@ -100,6 +106,14 @@ impl LoongArchRelocation {
                 }
                 (value as u32 & 0xFFF) << 10
             },
+            Self::PCLO12 | Self::PCLO12S => {
+                // PC-relative low 12 bits: same bit encoding as SI12 (bits 10-21),
+                // but semantically represents (label - pc) rather than an absolute offset.
+                if !fits_signed_bitfield(value, 12) {
+                    return Err(ImpossibleRelocation { } );
+                }
+                (value as u32 & 0xFFF) << 10
+            },
             // PC32 is a raw 32-bit signed offset (no alignment requirement).
             // Used for PC-relative load/store placeholder values.
             Self::PC32 => {
@@ -124,9 +138,14 @@ impl Relocation for LoongArchRelocation {
         4 => Self::SI20,
         5 => Self::SI14,
         6 => Self::SI16,
-        7 => Self::SI12,
-        8 => panic!("unimplemented"),
-        x => Self::Plain(RelocationSize::from_encoding(x-8))
+7 => Self::SI12,
+            8 => Self::PCLO12,
+            13 => Self::PCLO12S,
+            9 => Self::Plain(RelocationSize::from_encoding(9)),
+            10 => Self::Plain(RelocationSize::from_encoding(10)),
+            11 => Self::Plain(RelocationSize::from_encoding(11)),
+            12 => Self::Plain(RelocationSize::from_encoding(12)),
+            x => Self::Plain(RelocationSize::from_encoding(x)),
         }
     }
     fn from_size(size: RelocationSize) -> Self {
@@ -182,6 +201,12 @@ impl Relocation for LoongArchRelocation {
             Self::SI12 => u64::from(
                 (value & mask) >> 10
             ),
+            Self::PCLO12 => u64::from(
+                (value & mask) >> 10
+            ),
+            Self::PCLO12S => u64::from(
+                (value & mask) >> 10
+            ),
             // PC32 is a raw 32-bit value — just read it directly.
             Self::PC32 => u64::from(value),
             Self::Plain(_) => unreachable!()
@@ -196,6 +221,8 @@ impl Relocation for LoongArchRelocation {
             Self::SI14 => 14,
             Self::SI16 => 16,
             Self::SI12 => 12,
+            Self::PCLO12 => 12,
+            Self::PCLO12S => 12,
             Self::PC32 => unreachable!(),
             Self::Plain(_) => unreachable!()
         };
