@@ -182,16 +182,25 @@ func generateOpmapFile(path string, insns []InsnDescription) error {
 			}
 
 			// 生成处理器列表
-				// RefOffset expands to base register + offset, so we emit R(5) + offset command
-				var procList []string
+			// RefOffset expands to base register + offset, so we emit R(5) + offset command
+			// RefLabel expands to base register + jump target, so we emit R(5) + Offset(PCLO12/PCLO12S)
+			var procList []string
 
-				for idx, arg := range args {
-					if arg.Kind == ArgKindRefOffset {
-						procList = append(procList, "R(5)", "SImm(10, 12)")
-					} else {
-						procList = append(procList, argToProcessor(mnemonic, idx, arg))
+			for idx, arg := range args {
+				if arg.Kind == ArgKindRefOffset {
+					procList = append(procList, "R(5)", "SImm(10, 12)")
+				} else if arg.Kind == ArgKindRefLabel {
+					// RefLabel expands to base register + jump target in flatten_args.
+					// For load instructions use PCLO12, for store instructions use PCLO12S.
+					reloc := "PCLO12"
+					if strings.HasPrefix(mnemonic, "st.") || strings.HasPrefix(mnemonic, "fst.") {
+						reloc = "PCLO12S"
 					}
+					procList = append(procList, "R(5)", "Offset("+reloc+")")
+				} else {
+					procList = append(procList, argToProcessor(mnemonic, idx, arg))
 				}
+			}
 
 				file.WriteString(fmt.Sprintf("    Single(%s) , [%s] => [%s];\n",
 					formattedBits, strings.Join(argList, ", "), strings.Join(procList, ", ")))
@@ -234,6 +243,8 @@ func argToRust(mnemonic string, idx int, arg *Arg) string {
 		return "Offset"
 	case ArgKindRefOffset:
 		return "RefOffset"
+	case ArgKindRefLabel:
+		return "RefLabel"
 
 	default:
 		if len(arg.Slots) == 0 {
@@ -429,6 +440,10 @@ func processSpecialInstructions(descs []InsnDescription) []InsnDescription {
 	refOffsetDescs := addRefOffsetVariants(descs, load_store_insn)
 	tmp_descs = append(tmp_descs, refOffsetDescs...)
 
+	// Add RefLabel variants for PC-relative load/store instructions
+	refLabelDescs := addRefLabelVariants(descs, load_store_insn)
+	tmp_descs = append(tmp_descs, refLabelDescs...)
+
 	descs = append(descs, tmp_descs...)
 	return descs
 }
@@ -489,6 +504,61 @@ func addRefOffsetVariants(descs []InsnDescription, load_store_insn map[string]Ar
 			Word:       desc.Word,
 			Mnemonic:   desc.Mnemonic,
 			Format:     refOffsetFormat,
+			OrigFormat: nil,
+			Attribs:    desc.Attribs,
+		})
+	}
+	return result
+}
+
+// addRefLabelVariants generates [dest_reg, RefLabel] entries for PC-relative
+// load/store instructions, enabling [base, <label>] syntax.
+// The RefLabel matcher expands to Register(base) + JumpTarget(jump) in flatten_args.
+// Store instructions use PCLO12S relocation, load instructions use PCLO12.
+func addRefLabelVariants(descs []InsnDescription, load_store_insn map[string]ArgKind) []InsnDescription {
+	var result []InsnDescription
+
+	for i := range descs {
+		desc := &descs[i]
+		mnemonic := desc.Mnemonic
+		if origName, ok := desc.Attribs["orig_name"]; ok && origName != desc.Mnemonic {
+			mnemonic = origName
+		}
+
+		_, ok := load_store_insn[mnemonic]
+		if !ok {
+			continue
+		}
+
+		format := desc.OrigFormat
+		if format == nil {
+			format = desc.Format
+		}
+		if format == nil {
+			continue
+		}
+
+		var destReg *Arg
+		for _, arg := range format.Args {
+			if destReg == nil && (arg.Kind == ArgKindIntReg || arg.Kind == ArgKindFPReg) {
+				destReg = arg
+			}
+		}
+		if destReg == nil {
+			continue
+		}
+
+		refLabelFormat := &InsnFormat{
+			Args: []*Arg{
+				copyArg(destReg),
+				{Kind: ArgKindRefLabel, Slots: nil},
+			},
+		}
+
+		result = append(result, InsnDescription{
+			Word:       desc.Word,
+			Mnemonic:   desc.Mnemonic,
+			Format:     refLabelFormat,
 			OrigFormat: nil,
 			Attribs:    desc.Attribs,
 		})

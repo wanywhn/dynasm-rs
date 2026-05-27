@@ -208,6 +208,12 @@ pub enum Relocation {
     SI16 = 6,
     // 12-bit offset,
     SI12 = 7,
+    // PC-relative low 12 bits for load instructions (signed)
+    // Encodes bits [21:10] of (label - pc)
+    PCLO12 = 8,
+    // PC-relative low 12 bits for store instructions (signed, shifted left 2)
+    // Encodes bits [23:10] of (label - pc)
+    PCLO12S = 13,
     // 8-bit literal
     LITERAL8 = 9,
     // 16-bit literal
@@ -227,9 +233,9 @@ impl Relocation {
         match self {
             Relocation::LITERAL8 => 1,
             Relocation::LITERAL16 => 2,
-            Relocation::B |Relocation::BZ| Relocation::J | Relocation::PC32 | 
+            Relocation::B |Relocation::BZ| Relocation::J | Relocation::PC32 |
             Relocation::LITERAL32 | Relocation::SI20 | Relocation::SI14 | Relocation::SI16 |
-            Relocation::SI12 => 4,
+            Relocation::SI12 | Relocation::PCLO12 | Relocation::PCLO12S => 4,
             Relocation::LITERAL64 => 8,
         }
     }
