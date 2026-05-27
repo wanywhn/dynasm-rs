@@ -173,6 +173,10 @@ impl Relocation for LoongArchRelocation {
         if let Self::Plain(s) = self {
             return s.read_value(buf);
         };
+        // PC32 is a raw 32-bit signed offset — no bitfield extraction needed.
+        if let Self::PC32 = self {
+            return i64::from(LittleEndian::read_i32(buf)) as isize;
+        }
         let mask = !self.op_mask();
         let value = LittleEndian::read_u32(buf);
         let unpacked = match self {
