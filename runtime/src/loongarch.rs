@@ -162,21 +162,18 @@ impl Relocation for LoongArchRelocation {
     type Encoding = (u8,);
     fn from_encoding(encoding: Self::Encoding) -> Self {
         match encoding.0 {
-        0 => Self::B16,
-        1 => Self::B21,
+            0 => Self::B16,
+            1 => Self::B21,
             2 => Self::B26,
             4 => Self::ABS_HI20,
-        5 => Self::SI14,
+            5 => Self::SI14,
+            6 => Self::B16,  // SI16 merged into B16 (identical encoding)
             7 => Self::SI12,
             8 => Self::PCALA_LO12,
             13 => Self::PCALA_HI20,
             14 => Self::PCADD_SHIFT2,
             15 => Self::PCADD_SHIFT12,
             16 => Self::PCADD_SHIFT18,
-            9 => Self::Plain(RelocationSize::from_encoding(9)),
-            10 => Self::Plain(RelocationSize::from_encoding(10)),
-            11 => Self::Plain(RelocationSize::from_encoding(11)),
-            12 => Self::Plain(RelocationSize::from_encoding(12)),
             x => Self::Plain(RelocationSize::from_encoding(x)),
         }
     }
