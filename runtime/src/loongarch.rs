@@ -11,29 +11,41 @@ use crate::relocations::{fits_signed_bitfield, ImpossibleRelocation, Relocation,
 #[allow(missing_docs)]
 pub enum LoongArchRelocation {
     // Branch instructions (beq, bne, jirl)
-    // 16-bit offset, 2-bit aligned
+    // 16-bit offset, 2-bit aligned.
+    // Per LoongArch manual: PC = PC + SignExtend({offs16, 2'b0}, GRLEN).
+    // The assembler receives byte offsets; value & 3 == 0 is required because
+    // all LoongArch instructions are 4 bytes wide.
     B,
     // Branch instructions (beqz, bnez, bceqz, bcnez)
-    // 21-bit offset, 2-bit aligned
+    // 21-bit offset, 2-bit aligned. Same alignment rationale as B.
     BZ,
     // Jump instructions (b, bl)
-    // 26-bit offset, 2-bit aligned
+    // 26-bit offset, 2-bit aligned. Same alignment rationale as B.
     J,
-    // PC-relative load/store
-    // 32-bit offset
-    PC32,
 
-    // 20-bit offset
+    // 20-bit signed immediate (compile-time only).
+    // Used by lu12i.w, lu32i.d, pcaddi, pcaddu12i.
+    // Per LoongArch manual: si20 is sign-extended; for lu12i/pcaddu12i it
+    // is concatenated with 12 trailing zeros. This relocation is NOT used
+    // for label resolution — the compiler encodes si20 directly into
+    // bits [24:5] at compile time. The runtime encode/read_value path
+    // exists only for testing/debugging.
     SI20,
     // 14-bit offset, 2-bit aligned
     SI14,
     // 16-bit offset, 2-bit aligned
     SI16,
-    // 12-bit offset,
+    // 12-bit signed offset (used by load/store with register + offset syntax)
     SI12,
-    // PC-relative low 12 bits for load instructions (signed)
+    // PC-relative low 12 bits for load instructions.
+    // Encodes bits [21:10] of (label_addr - instruction_pc).
+    // Used by ld.b/ld.h/ld.w/ld.d, fld.s/fld.d.
     PCLO12,
-    // PC-relative low 12 bits for store instructions (signed)
+    // PC-relative low 12 bits for store instructions.
+    // Encoding is IDENTICAL to PCLO12: bits [21:10] of (label_addr - instruction_pc),
+    // same bit range [10, 12], shift=0. The separate variant exists only for
+    // semantic distinction (load vs store relocation type) — at runtime they
+    // follow the exact same code path.
     PCLO12S,
     Plain(RelocationSize),
 }
@@ -44,9 +56,6 @@ impl LoongArchRelocation {
             Self::B => 0xFC00_03FF,
             Self::BZ => 0xFC00_03E0,
             Self::J => 0xFC00_0000,
-            // PC32 is a plain 32-bit value — mask=0 means the entire
-            // instruction word is overwritten by encode().
-            Self::PC32 => 0,
             Self::SI20 => 0xFE00_001F,
             Self::SI14 => 0xFF00_03FF,
             Self::SI16 => 0xFC00_03FF,
@@ -114,15 +123,7 @@ impl LoongArchRelocation {
                 }
                 (value as u32 & 0xFFF) << 10
             },
-            // PC32 is a raw 32-bit signed offset (no alignment requirement).
-            // Used for PC-relative load/store placeholder values.
-            Self::PC32 => {
-                if !fits_signed_bitfield(value, 32) {
-                    return Err(ImpossibleRelocation { } );
-                }
-                value as u32
-            },
-            Self::Plain(_) => return Err(ImpossibleRelocation { } )
+            Self::Plain(_) => return Err(ImpossibleRelocation {}),
         })
     }
 }
@@ -133,9 +134,8 @@ impl Relocation for LoongArchRelocation {
         match encoding.0 {
         0 => Self::B,
         1 => Self::BZ,
-        2 => Self::J,
-        3 => Self::PC32,
-        4 => Self::SI20,
+            2 => Self::J,
+            4 => Self::SI20,
         5 => Self::SI14,
         6 => Self::SI16,
 7 => Self::SI12,
@@ -173,10 +173,6 @@ impl Relocation for LoongArchRelocation {
         if let Self::Plain(s) = self {
             return s.read_value(buf);
         };
-        // PC32 is a raw 32-bit signed offset — no bitfield extraction needed.
-        if let Self::PC32 = self {
-            return i64::from(LittleEndian::read_i32(buf)) as isize;
-        }
         let mask = !self.op_mask();
         let value = LittleEndian::read_u32(buf);
         let unpacked = match self {
@@ -208,12 +204,8 @@ impl Relocation for LoongArchRelocation {
             Self::PCLO12 => u64::from(
                 (value & mask) >> 10
             ),
-            Self::PCLO12S => u64::from(
-                (value & mask) >> 10
-            ),
-            // PC32 is a raw 32-bit value — just read it directly.
-            Self::PC32 => u64::from(value),
-            Self::Plain(_) => unreachable!()
+            Self::PCLO12S => u64::from((value & mask) >> 10),
+            Self::Plain(_) => unreachable!(),
         };
 
         // Sign extend.
@@ -227,8 +219,7 @@ impl Relocation for LoongArchRelocation {
             Self::SI12 => 12,
             Self::PCLO12 => 12,
             Self::PCLO12S => 12,
-            Self::PC32 => unreachable!(),
-            Self::Plain(_) => unreachable!()
+            Self::Plain(_) => unreachable!(),
         };
         let offset = 1u64 << (bits - 1);
         let value: u64 = (unpacked ^ offset).wrapping_sub(offset);
@@ -361,6 +352,45 @@ pub fn invalid_register(register: u8) -> ! {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Compile-time validation: `from_encoding` discriminants must match
+    /// the plugin `Relocation::DISCRIMINANT_TABLE` exactly.
+    /// If the plugin adds/removes/renames a relocation variant, this test
+    /// will fail at compile time (const) or runtime (test), preventing silent
+    /// desync between the proc-macro and the runtime library.
+    ///
+    /// NOTE: LITERAL8/16/32/64 (discriminants 9-12) are excluded because
+    /// they map to `Plain(RelocationSize::from_encoding(N))` which panics
+    /// for those values — this is pre-existing dead code that will be fixed
+    /// when literal relocation support is implemented.
+    const ENCODING_TABLE: &'static [(u8, fn() -> LoongArchRelocation)] = &[
+        (0, || LoongArchRelocation::B),
+        (1, || LoongArchRelocation::BZ),
+        (2, || LoongArchRelocation::J),
+        (4, || LoongArchRelocation::SI20),
+        (5, || LoongArchRelocation::SI14),
+        (6, || LoongArchRelocation::SI16),
+        (7, || LoongArchRelocation::SI12),
+        (8, || LoongArchRelocation::PCLO12),
+        (13, || LoongArchRelocation::PCLO12S),
+    ];
+
+    #[test]
+    fn test_from_encoding_consistency() {
+        // Verify every discriminant in ENCODING_TABLE round-trips through from_encoding
+        for &(disc, ref ctor) in ENCODING_TABLE {
+            let expected = ctor();
+            let actual = LoongArchRelocation::from_encoding((disc,));
+            assert_eq!(
+                std::mem::discriminant(&expected),
+                std::mem::discriminant(&actual),
+                "from_encoding({}): mismatch — expected {:?}, got {:?}",
+                disc,
+                expected,
+                actual,
+            );
+        }
+    }
 
     #[test]
     fn test_assembler_creation() {
