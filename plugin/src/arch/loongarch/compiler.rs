@@ -213,8 +213,6 @@ Command::SImm(offset, bitlen) => {
                                                                         let arr = &[0, 10, 10, 16];
                                                                         fun_name(&mut statics, &mut dynamics, value, arr, 2)?;
                                                                                         },
-                                    Relocation::PC32 => {
-                                                                                        },
                                     Relocation::LITERAL8
                                                                                         | Relocation::LITERAL16
                                                                                         | Relocation::LITERAL32

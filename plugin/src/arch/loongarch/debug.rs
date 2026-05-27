@@ -145,7 +145,6 @@ fn format_constraints(data: &Opdata) -> String {
             Command::Offset(reloc) => match reloc {
                                 Relocation::B => constraints.push("16-bit offset, 2-byte aligned".to_string()),
                                 Relocation::J => constraints.push("26-bit offset, 2-byte aligned".to_string()),
-                                Relocation::PC32 => constraints.push("32-bit PC-relative offset".to_string()),
                                 Relocation::PCLO12 => constraints.push("12-bit PC-relative offset (load)".to_string()),
                                 Relocation::PCLO12S => constraints.push("12-bit PC-relative offset (store)".to_string()),
                                 _ => (),
@@ -302,7 +301,6 @@ fn extract_constraints(data: &Opdata) -> Vec<String> {
             Command::Offset(Relocation::LITERAL64) => format!("Range(-{}, {}, {})", 1u64<<63, 1u64<<63, 1),
             Command::Offset(Relocation::LITERAL8) => format!("Range(-{}, {}, {})", 1<<31, 1<<31, 1),
             Command::Offset(Relocation::LITERAL16) => format!("Range(-{}, {}, {})", 1u64<<63, 1u64<<63, 1),
-            Command::Offset(Relocation::PC32) => format!("Range(-{}, {}, {})", 1u64<<63, 1u64<<63, 1),
             Command::Next | Command::Repeat => continue,
             Command::F(_) => format!("F(0xFFFFFFFF)"),
             Command::C(_) => format!("C(0x7)"),
