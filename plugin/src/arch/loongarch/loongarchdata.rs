@@ -185,24 +185,24 @@ pub enum Command {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[allow(dead_code)] // B/LITERAL variants unused until relocation implementation is complete (P3-1/P0-3)
+#[allow(dead_code)] // B16/LITERAL variants unused until relocation implementation is complete (P3-1/P0-3)
 pub enum Relocation {
     // Branch instructions (beq, bne, jirl)
     // 16-bit offset, 2-bit aligned.
     // Per LoongArch manual: PC = PC + SignExtend({offs16, 2'b0}, GRLEN).
     // Assembly receives byte offset; value & 3 == 0 is required because
     // all LoongArch instructions are 4 bytes wide.
-    B = 0,
+    B16 = 0,
     // Branch instructions (beqz, bnez, bceqz, bcnez)
     // 21-bit offset, 2-bit aligned.
     // Per LoongArch manual: PC = PC + SignExtend({offs21, 2'b0}, GRLEN).
-    // Same alignment requirement as B.
-    BZ = 1,
+    // Same alignment requirement as B16.
+    B21 = 1,
     // Jump instructions (b, bl)
     // 26-bit offset, 2-bit aligned.
     // Per LoongArch manual: PC = PC + SignExtend({offs26, 2'b0}, GRLEN).
-    // Same alignment requirement as B.
-    J = 2,
+    // Same alignment requirement as B16.
+    B26 = 2,
 
     // 20-bit signed immediate.
     // Used by lu12i.w, lu32i.d, pcaddi, pcaddu12i.
@@ -210,23 +210,23 @@ pub enum Relocation {
     // Per LoongArch manual: the 20-bit si20 is sign-extended and written
     // to the register field (with 12 trailing zeros for lu12i/pcaddu12i).
     // The compiler encodes the raw si20 value into bits [24:5] (shift=0).
-    SI20 = 4,
+    ABS_HI20 = 4,
     // 14-bit offset, 2-bit aligned (branch with register offset)
     SI14 = 5,
     // 16-bit offset, 2-bit aligned
     SI16 = 6,
     // 12-bit signed offset (used by load/store with register + offset syntax)
     SI12 = 7,
-    // PC-relative low 12 bits for load instructions.
+    // PC-relative low 12 bits.
     // Encodes bits [21:10] of (label_addr - instruction_pc).
-    // Used by ld.b/ld.h/ld.w/ld.d, fld.s/fld.d.
-    PCLO12 = 8,
-    // PC-relative low 12 bits for store instructions.
-    // Encoding is IDENTICAL to PCLO12: bits [21:10] of (label_addr - instruction_pc),
-    // shift=0, same bit range [10, 12]. The separate variant exists only for
-    // semantic distinction (load vs store relocation type) — at runtime they
-    // follow the same code path. Not "shifted left 2".
-    PCLO12S = 13,
+    // Used by ld.b/ld.h/ld.w/ld.d, st.b/st.h/st.w/st.d, fld.s/fld.d, fst.s/fst.d.
+    PCALA_LO12 = 8,
+    // PC-relative high 20 bits for pcalau12i (corresponds to ELF R_LARCH_PCALA_HI20).
+    // Encodes bits [31:12] of (label_addr - instruction_pc), placed at bits [24:5].
+    // Paired with PCALA_LO12 to form a full 32-bit PC-relative address load:
+    //   pcalau12i $t0, :pc label   → PCALA_HI20 + PCALA_LO12
+    //   addi.d    $t0, $t0, :lo label
+    PCALA_HI20 = 13,
     // 8-bit literal
     LITERAL8 = 9,
     // 16-bit literal
@@ -245,15 +245,15 @@ impl Relocation {
     /// can be checked against at compile time.
     #[allow(dead_code)] // Reference table for runtime `from_encoding` consistency test
     pub const DISCRIMINANT_TABLE: &'static [(u8, &'static str)] = &[
-        (0, "B"),
-        (1, "BZ"),
-        (2, "J"),
-        (4, "SI20"),
+        (0, "B16"),
+        (1, "B21"),
+        (2, "B26"),
+        (4, "ABS_HI20"),
         (5, "SI14"),
         (6, "SI16"),
         (7, "SI12"),
-        (8, "PCLO12"),
-        (13, "PCLO12S"),
+        (8, "PCALA_LO12"),
+        (13, "PCALA_HI20"),
         (9, "LITERAL8"),
         (10, "LITERAL16"),
         (11, "LITERAL32"),
@@ -268,16 +268,16 @@ impl Relocation {
         match self {
             Relocation::LITERAL8 => 1,
             Relocation::LITERAL16 => 2,
-            Relocation::B
-            | Relocation::BZ
-            | Relocation::J
+            Relocation::B16
+            | Relocation::B21
+            | Relocation::B26
             | Relocation::LITERAL32
-            | Relocation::SI20
+            | Relocation::ABS_HI20
             | Relocation::SI14
             | Relocation::SI16
             | Relocation::SI12
-            | Relocation::PCLO12
-            | Relocation::PCLO12S => 4,
+            | Relocation::PCALA_LO12
+            | Relocation::PCALA_HI20 => 4,
             Relocation::LITERAL64 => 8,
         }
     }

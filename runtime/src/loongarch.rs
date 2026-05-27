@@ -15,13 +15,13 @@ pub enum LoongArchRelocation {
     // Per LoongArch manual: PC = PC + SignExtend({offs16, 2'b0}, GRLEN).
     // The assembler receives byte offsets; value & 3 == 0 is required because
     // all LoongArch instructions are 4 bytes wide.
-    B,
+    B16,
     // Branch instructions (beqz, bnez, bceqz, bcnez)
-    // 21-bit offset, 2-bit aligned. Same alignment rationale as B.
-    BZ,
+    // 21-bit offset, 2-bit aligned. Same alignment rationale as B16.
+    B21,
     // Jump instructions (b, bl)
-    // 26-bit offset, 2-bit aligned. Same alignment rationale as B.
-    J,
+    // 26-bit offset, 2-bit aligned. Same alignment rationale as B16.
+    B26,
 
     // 20-bit signed immediate (compile-time only).
     // Used by lu12i.w, lu32i.d, pcaddi, pcaddu12i.
@@ -30,7 +30,7 @@ pub enum LoongArchRelocation {
     // for label resolution — the compiler encodes si20 directly into
     // bits [24:5] at compile time. The runtime encode/read_value path
     // exists only for testing/debugging.
-    SI20,
+    ABS_HI20,
     // 14-bit offset, 2-bit aligned
     SI14,
     // 16-bit offset, 2-bit aligned
@@ -40,56 +40,55 @@ pub enum LoongArchRelocation {
     // PC-relative low 12 bits for load instructions.
     // Encodes bits [21:10] of (label_addr - instruction_pc).
     // Used by ld.b/ld.h/ld.w/ld.d, fld.s/fld.d.
-    PCLO12,
-    // PC-relative low 12 bits for store instructions.
-    // Encoding is IDENTICAL to PCLO12: bits [21:10] of (label_addr - instruction_pc),
-    // same bit range [10, 12], shift=0. The separate variant exists only for
-    // semantic distinction (load vs store relocation type) — at runtime they
-    // follow the exact same code path.
-    PCLO12S,
+    PCALA_LO12,
+    // PC-relative high 20 bits for pcalau12i.
+    // Corresponds to ELF R_LARCH_PCALA_HI20. Encodes bits [31:12] of
+    // (label_addr - instruction_pc), placed at instruction bits [24:5].
+    // Paired with PCALA_LO12 to form a full 32-bit PC-relative address.
+    PCALA_HI20,
     Plain(RelocationSize),
 }
 
 impl LoongArchRelocation {
     fn op_mask(&self) -> u32 {
         match self {
-            Self::B => 0xFC00_03FF,
-            Self::BZ => 0xFC00_03E0,
-            Self::J => 0xFC00_0000,
-            Self::SI20 => 0xFE00_001F,
+            Self::B16 => 0xFC00_03FF,
+            Self::B21 => 0xFC00_03E0,
+            Self::B26 => 0xFC00_0000,
+            Self::ABS_HI20 => 0xFE00_001F,
             Self::SI14 => 0xFF00_03FF,
             Self::SI16 => 0xFC00_03FF,
             Self::SI12 => 0xFFC0_03FF,
-            Self::PCLO12 => 0xFFC0_03FF,
-            Self::PCLO12S => 0xFFC0_03FF,
+            Self::PCALA_LO12 => 0xFFC0_03FF,
+            Self::PCALA_HI20 => 0xFE00_001F,
             Self::Plain(_) => 0,
         }
     }
     fn encode(&self, value: isize) -> Result<u32, ImpossibleRelocation> {
         let value = i64::try_from(value).map_err(|_| ImpossibleRelocation { } )?;
         Ok(match self {
-            Self::B => {
+            Self::B16 => {
                 if value & 3 != 0 || !fits_signed_bitfield(value >> 2, 16) {
                     return Err(ImpossibleRelocation { } );
                 }
                 let value = (value >> 2) as u32;
                 (value & 0xFFFF) << 10
             },
-            Self::BZ => {
+            Self::B21 => {
                 if value & 3 != 0 || !fits_signed_bitfield(value >> 2, 21) {
                     return Err(ImpossibleRelocation { } );
                 }
                 let value = (value >> 2) as u32;
                 (value & 0xFFFF) << 10 | ((value >> 16) & 0x1F)
             },
-            Self::J => {
+            Self::B26 => {
                 if value & 3 != 0 || !fits_signed_bitfield(value >> 2, 26) {
                     return Err(ImpossibleRelocation { } );
                 }
                 let value = (value >> 2) as u32;
                 ((value & 0xFFFF) << 10) | ((value >> 16) & 0x3FF)
             },
-            Self::SI20 => {
+            Self::ABS_HI20 => {
                 if !fits_signed_bitfield(value, 20) {
                     return Err(ImpossibleRelocation { } );
                 }
@@ -115,13 +114,21 @@ impl LoongArchRelocation {
                 }
                 (value as u32 & 0xFFF) << 10
             },
-            Self::PCLO12 | Self::PCLO12S => {
+            Self::PCALA_LO12 => {
                 // PC-relative low 12 bits: same bit encoding as SI12 (bits 10-21),
                 // but semantically represents (label - pc) rather than an absolute offset.
                 if !fits_signed_bitfield(value, 12) {
-                    return Err(ImpossibleRelocation { } );
+                    return Err(ImpossibleRelocation {});
                 }
                 (value as u32 & 0xFFF) << 10
+            },
+            Self::PCALA_HI20 => {
+                // PC-relative high 20 bits for pcalau12i.
+                // bits [31:12] of (label - pc), placed at instruction bits [24:5].
+                if !fits_signed_bitfield(value >> 12, 20) {
+                    return Err(ImpossibleRelocation {});
+                }
+                ((value >> 12) as u32 & 0xF_FFFF) << 5
             },
             Self::Plain(_) => return Err(ImpossibleRelocation {}),
         })
@@ -132,15 +139,15 @@ impl Relocation for LoongArchRelocation {
     type Encoding = (u8,);
     fn from_encoding(encoding: Self::Encoding) -> Self {
         match encoding.0 {
-        0 => Self::B,
-        1 => Self::BZ,
-            2 => Self::J,
-            4 => Self::SI20,
+        0 => Self::B16,
+        1 => Self::B21,
+            2 => Self::B26,
+            4 => Self::ABS_HI20,
         5 => Self::SI14,
         6 => Self::SI16,
 7 => Self::SI12,
-            8 => Self::PCLO12,
-            13 => Self::PCLO12S,
+            8 => Self::PCALA_LO12,
+            13 => Self::PCALA_HI20,
             9 => Self::Plain(RelocationSize::from_encoding(9)),
             10 => Self::Plain(RelocationSize::from_encoding(10)),
             11 => Self::Plain(RelocationSize::from_encoding(11)),
@@ -176,20 +183,20 @@ impl Relocation for LoongArchRelocation {
         let mask = !self.op_mask();
         let value = LittleEndian::read_u32(buf);
         let unpacked = match self {
-            Self::B => u64::from(
+            Self::B16 => u64::from(
                 (value & mask) >> 10
             ) << 2,
-            Self::BZ => {
+            Self::B21 => {
                 let value = value & mask;
                 let tvalue = (value & 0x1F) << 16 | (value & 0xffff);
                 u64::from( tvalue ) << 2
             },
-            Self::J  => {
+            Self::B26  => {
                 let value = value & mask;
                 let tvalue = (value & 0x3FF) << 16 | (value & 0xffff);
                 u64::from( tvalue ) << 2
             },
-            Self::SI20 => u64::from(
+            Self::ABS_HI20 => u64::from(
                 (value & mask) >> 5
             ),
             Self::SI14 => u64::from(
@@ -201,24 +208,24 @@ impl Relocation for LoongArchRelocation {
             Self::SI12 => u64::from(
                 (value & mask) >> 10
             ),
-            Self::PCLO12 => u64::from(
+            Self::PCALA_LO12 => u64::from(
                 (value & mask) >> 10
             ),
-            Self::PCLO12S => u64::from((value & mask) >> 10),
+            Self::PCALA_HI20 => u64::from((value & mask) >> 10),
             Self::Plain(_) => unreachable!(),
         };
 
         // Sign extend.
         let bits = match self {
-            Self::B => 16,
-            Self::BZ => 21,
-            Self::J => 26,
-            Self::SI20 => 20,
+            Self::B16 => 16,
+            Self::B21 => 21,
+            Self::B26 => 26,
+            Self::ABS_HI20 => 20,
             Self::SI14 => 14,
             Self::SI16 => 16,
             Self::SI12 => 12,
-            Self::PCLO12 => 12,
-            Self::PCLO12S => 12,
+            Self::PCALA_LO12 => 12,
+            Self::PCALA_HI20 => 12,
             Self::Plain(_) => unreachable!(),
         };
         let offset = 1u64 << (bits - 1);
@@ -364,15 +371,15 @@ mod tests {
     /// for those values — this is pre-existing dead code that will be fixed
     /// when literal relocation support is implemented.
     const ENCODING_TABLE: &'static [(u8, fn() -> LoongArchRelocation)] = &[
-        (0, || LoongArchRelocation::B),
-        (1, || LoongArchRelocation::BZ),
-        (2, || LoongArchRelocation::J),
-        (4, || LoongArchRelocation::SI20),
+        (0, || LoongArchRelocation::B16),
+        (1, || LoongArchRelocation::B21),
+        (2, || LoongArchRelocation::B26),
+        (4, || LoongArchRelocation::ABS_HI20),
         (5, || LoongArchRelocation::SI14),
         (6, || LoongArchRelocation::SI16),
         (7, || LoongArchRelocation::SI12),
-        (8, || LoongArchRelocation::PCLO12),
-        (13, || LoongArchRelocation::PCLO12S),
+        (8, || LoongArchRelocation::PCALA_LO12),
+        (13, || LoongArchRelocation::PCALA_LO12),
     ];
 
     #[test]

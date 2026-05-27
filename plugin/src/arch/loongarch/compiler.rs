@@ -205,11 +205,11 @@ Command::SImm(offset, bitlen) => {
 
                                 // equivalent bitrange encodings for offsets
                                 match relocation_type {
-                                    Relocation::B => {
+                                    Relocation::B16 => {
                                                                                             let arr = &[10, 16];
                                                                                             fun_name(&mut statics, &mut dynamics, value, arr, 2)?;
                                                                                         },
-                                    Relocation::J => {
+                                    Relocation::B26 => {
                                                                         let arr = &[0, 10, 10, 16];
                                                                         fun_name(&mut statics, &mut dynamics, value, arr, 2)?;
                                                                                         },
@@ -217,11 +217,11 @@ Command::SImm(offset, bitlen) => {
                                                                                         | Relocation::LITERAL16
                                                                                         | Relocation::LITERAL32
                                                                                         | Relocation::LITERAL64 => panic!("Literal relocation in instruction"),
-                                    Relocation::BZ => {
+                                    Relocation::B21 => {
                                                                         let arr = &[0, 5, 10, 16];
                                                                         fun_name(&mut statics, &mut dynamics, value, arr, 2)?;
                                                                     },
-                                    Relocation::SI20 => {
+                                    Relocation::ABS_HI20 => {
                                         let arr = &[5, 20];
                                         fun_name(&mut statics, &mut dynamics, value, arr, 0)?;
                                     },
@@ -229,8 +229,13 @@ Command::SImm(offset, bitlen) => {
                                         let arr = &[10, 14];
                                         fun_name(&mut statics, &mut dynamics, value, arr, 2)?;
                                     },
-                                    Relocation::SI12 | Relocation::PCLO12 | Relocation::PCLO12S => {
+                                    Relocation::SI12 | Relocation::PCALA_LO12 => {
                                         let arr = &[10, 12];
+                                        fun_name(&mut statics, &mut dynamics, value, arr, 0)?;
+                                    },
+                                    Relocation::PCALA_HI20 => {
+                                        // pcalau12i high 20 bits: bits [31:12] of offset, placed at [24:5]
+                                        let arr = &[5, 20];
                                         fun_name(&mut statics, &mut dynamics, value, arr, 0)?;
                                     },
                                     Relocation::SI16 => {
