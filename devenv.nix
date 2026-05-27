@@ -47,7 +47,7 @@ in
       ./tools/loongarch_gen_opmap/loongarch_gen_opmap tools/loongarch_data/loongarch_opcodes plugin/src/arch/loongarch/opmap.rs
     '';
     # NOTE: Use --test loongarch_N (not bare "loongarch") to select test binaries by filename.
-    # "cargo test loongarch" filters by test function name, which misses all loongarch tests
+    # "cargo test loongarch" filters by test function name, which matches ZERO loongarch tests
     # since their function names are like add_d_0, sub_d_1, etc. — none contain "loongarch".
     test-loongarch.exec = ''
       cd testing && cargo test -j 1 --test loongarch_0 --test loongarch_1 --test loongarch_2 --test loongarch_3 --test loongarch_4 --test loongarch_5 --test loongarch_6
