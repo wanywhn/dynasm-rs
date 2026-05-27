@@ -231,7 +231,7 @@ Command::SImm(offset, bitlen) => {
                                         let arr = &[10, 14];
                                         fun_name(&mut statics, &mut dynamics, value, arr, 2)?;
                                     },
-                                    Relocation::SI12 => {
+                                    Relocation::SI12 | Relocation::PCLO12 | Relocation::PCLO12S => {
                                         let arr = &[10, 12];
                                         fun_name(&mut statics, &mut dynamics, value, arr, 0)?;
                                     },

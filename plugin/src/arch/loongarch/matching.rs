@@ -64,6 +64,18 @@ fn sanitize_args(args: &mut [RawArg], _target: &LoongArchTarget) -> Result<(), O
                     return Err(None);
                 }
             },
+            RawArg::LabelReference { base, span, jump } => {
+                sanitize_register(base, *span)?;
+                if base.family() != RegFamily::INTEGER {
+                    emit_error!(span, "Base register needs to be a regular (integer) register");
+                    return Err(None);
+                }
+                // External relocations in LabelReference not yet supported
+                if let JumpKind::Bare(_) = jump.kind {
+                    emit_error!(jump.span(), "External relocations not yet supported for LoongArch");
+                    return Err(None);
+                }
+            },
             _ => ()
         }
     }
@@ -180,7 +192,13 @@ fn flatten_args(args: Vec<RawArg>, data: &mut MatchData) {
                 },
                 _ => unreachable!("Expected reference")
             },
-            RawArg::LabelReference { .. } => unreachable!("Label references not supported"),
+            RawArg::LabelReference { span, base, jump } => match matcher {
+                Matcher::RefLabel => {
+                    data.args.push(FlatArg::Register { span, reg: base });
+                    data.args.push(FlatArg::JumpTarget { jump });
+                },
+                _ => unreachable!("Expected RefLabel matcher for LabelReference"),
+            },
         }
     }
 }

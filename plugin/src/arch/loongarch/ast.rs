@@ -149,7 +149,6 @@ impl Register {
 
 /// A LoongArch parsed instruction argument
 #[derive(Debug)]
-#[allow(dead_code)] // LabelReference variant unused until parser supports PC-relative refs (P0-1)
 pub enum RawArg {
     // An immediate value or identifier
     Immediate {

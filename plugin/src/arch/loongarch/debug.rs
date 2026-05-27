@@ -146,6 +146,8 @@ fn format_constraints(data: &Opdata) -> String {
                                 Relocation::B => constraints.push("16-bit offset, 2-byte aligned".to_string()),
                                 Relocation::J => constraints.push("26-bit offset, 2-byte aligned".to_string()),
                                 Relocation::PC32 => constraints.push("32-bit PC-relative offset".to_string()),
+                                Relocation::PCLO12 => constraints.push("12-bit PC-relative offset (load)".to_string()),
+                                Relocation::PCLO12S => constraints.push("12-bit PC-relative offset (store)".to_string()),
                                 _ => (),
                             },
             Command::Next | Command::Repeat => (),
@@ -293,6 +295,8 @@ fn extract_constraints(data: &Opdata) -> Vec<String> {
             Command::Offset(Relocation::SI14) => format!("Range(-{}, {}, {})", 1u64<<13, 1u64<<13, 4),
             Command::Offset(Relocation::SI16) => format!("Range(-{}, {}, {})", 1u64<<15, 1u64<<15, 4),
             Command::Offset(Relocation::SI12) => format!("Range(-{}, {}, {})", 1u64<<11, 1u64<<11, 1),
+            Command::Offset(Relocation::PCLO12) => format!("Range(-{}, {}, {})", 1u64<<11, 1u64<<11, 1),
+            Command::Offset(Relocation::PCLO12S) => format!("Range(-{}, {}, {})", 1u64<<11, 1u64<<11, 1),
             // TODO: is this need?
             Command::Offset(Relocation::LITERAL32) => format!("Range(-{}, {}, {})", 1<<31, 1<<31, 1),
             Command::Offset(Relocation::LITERAL64) => format!("Range(-{}, {}, {})", 1u64<<63, 1u64<<63, 1),
