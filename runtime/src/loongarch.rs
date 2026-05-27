@@ -365,7 +365,7 @@ mod tests {
         (6, || LoongArchRelocation::B16),  // SI16 merged into B16 (identical encoding)
         (7, || LoongArchRelocation::SI12),
         (8, || LoongArchRelocation::PCALA_LO12),
-        (13, || LoongArchRelocation::PCALA_LO12),
+        (13, || LoongArchRelocation::PCALA_HI20),
     ];
 
     #[test]
