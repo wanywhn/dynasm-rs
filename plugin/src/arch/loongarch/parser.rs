@@ -58,7 +58,7 @@ fn parse_arg(ctx: &mut Context, input: parse::ParseStream) -> parse::Result<ast:
         });
     }
 
-    // A memory reference. Format: [base, offset] or [base]
+    // A memory reference. Format: [base, offset] or [base, label] or [base]
     if input.peek(syn::token::Bracket) {
         let span = input.cursor().span();
         let inner;
@@ -67,17 +67,31 @@ fn parse_arg(ctx: &mut Context, input: parse::ParseStream) -> parse::Result<ast:
 
         let base = parse_reg(ctx, inner)?.ok_or_else(|| inner.error("Expected register"))?;
 
-        let offset = if inner.peek(Token![,]) {
+        if inner.peek(Token![,]) {
             let _: Token![,] = inner.parse()?;
-            Some(inner.parse()?)
-        } else {
-            None
-        };
+
+            // Try parsing a jump target first (for [base, <label>] PC-relative syntax)
+            if let Some(jump) = inner.parse_opt()? {
+                return Ok(ast::RawArg::LabelReference {
+                    span,
+                    base,
+                    jump,
+                });
+            }
+
+            // Otherwise parse as a numeric offset expression
+            let expr: syn::Expr = inner.parse()?;
+            return Ok(ast::RawArg::Reference {
+                span,
+                base,
+                offset: Some(expr),
+            });
+        }
 
         return Ok(ast::RawArg::Reference {
             span,
             base,
-            offset
+            offset: None,
         });
     }
 
