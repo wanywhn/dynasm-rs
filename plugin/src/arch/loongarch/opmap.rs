@@ -252,17 +252,17 @@ Ops!(
 ]
 
 "b" = [
-    Single(0b01010000_00000000_00000000_00000000) , [Offset] => [Offset(J)];
+    Single(0b01010000_00000000_00000000_00000000) , [Offset] => [Offset(B26)];
     Single(0b01010000_00000000_00000000_00000000) , [Imm] => [Sscaled(0, 10, 2)];
 ]
 
 "bceqz" = [
-    Single(0b01001000_00000000_00000000_00000000) , [C, Offset] => [C(5), Offset(BZ)];
+    Single(0b01001000_00000000_00000000_00000000) , [C, Offset] => [C(5), Offset(B21)];
     Single(0b01001000_00000000_00000000_00000000) , [C, Imm] => [C(5), Sscaled(0, 5, 2)];
 ]
 
 "bcnez" = [
-    Single(0b01001000_00000000_00000001_00000000) , [C, Offset] => [C(5), Offset(BZ)];
+    Single(0b01001000_00000000_00000001_00000000) , [C, Offset] => [C(5), Offset(B21)];
     Single(0b01001000_00000000_00000001_00000000) , [C, Imm] => [C(5), Sscaled(0, 5, 2)];
 ]
 
@@ -270,14 +270,14 @@ Ops!(
     Single(0b01011000_00000000_00000000_00000000) , [R, R, Offset] => [R(5), R(0), Offset(SI16)];
     Single(0b01011000_00000000_00000000_00000000) , [R, R, Imm] => [R(5), R(0), Sscaled(10, 16, 2)];
     Single(0b01011000_00000000_00000000_00000000) , [R, RefOffset] => [R(5), R(5), SImm(10, 12)];
-    Single(0b01011000_00000000_00000000_00000000) , [R, RefLabel] => [R(5), R(5), Offset(PCLO12)];
+    Single(0b01011000_00000000_00000000_00000000) , [R, RefLabel] => [R(5), R(5), Offset(PCALA_LO12)];
 ]
 
 "beqz" = [
-    Single(0b01000000_00000000_00000000_00000000) , [R, Offset] => [R(5), Offset(BZ)];
+    Single(0b01000000_00000000_00000000_00000000) , [R, Offset] => [R(5), Offset(B21)];
     Single(0b01000000_00000000_00000000_00000000) , [R, Imm] => [R(5), Sscaled(0, 5, 2)];
     Single(0b01000000_00000000_00000000_00000000) , [R, RefOffset] => [R(5), R(5), SImm(10, 12)];
-    Single(0b01000000_00000000_00000000_00000000) , [R, RefLabel] => [R(5), R(5), Offset(PCLO12)];
+    Single(0b01000000_00000000_00000000_00000000) , [R, RefLabel] => [R(5), R(5), Offset(PCALA_LO12)];
 ]
 
 "blt" = [
@@ -288,7 +288,7 @@ Ops!(
     // orig_name: blt
     Single(0b01100000_00000000_00000000_00000000) , [R, RefOffset] => [R(5), R(5), SImm(10, 12)];
     // orig_name: blt
-    Single(0b01100000_00000000_00000000_00000000) , [R, RefLabel] => [R(5), R(5), Offset(PCLO12)];
+    Single(0b01100000_00000000_00000000_00000000) , [R, RefLabel] => [R(5), R(5), Offset(PCALA_LO12)];
 ]
 
 "bltu" = [
@@ -299,11 +299,11 @@ Ops!(
     // orig_name: bltu
     Single(0b01101000_00000000_00000000_00000000) , [R, RefOffset] => [R(5), R(5), SImm(10, 12)];
     // orig_name: bltu
-    Single(0b01101000_00000000_00000000_00000000) , [R, RefLabel] => [R(5), R(5), Offset(PCLO12)];
+    Single(0b01101000_00000000_00000000_00000000) , [R, RefLabel] => [R(5), R(5), Offset(PCALA_LO12)];
 ]
 
 "bl" = [
-    Single(0b01010100_00000000_00000000_00000000) , [Offset] => [Offset(J)];
+    Single(0b01010100_00000000_00000000_00000000) , [Offset] => [Offset(B26)];
     Single(0b01010100_00000000_00000000_00000000) , [Imm] => [Sscaled(0, 10, 2)];
 ]
 
@@ -315,7 +315,7 @@ Ops!(
     // orig_name: bge
     Single(0b01100100_00000000_00000000_00000000) , [R, RefOffset] => [R(5), R(5), SImm(10, 12)];
     // orig_name: bge
-    Single(0b01100100_00000000_00000000_00000000) , [R, RefLabel] => [R(5), R(5), Offset(PCLO12)];
+    Single(0b01100100_00000000_00000000_00000000) , [R, RefLabel] => [R(5), R(5), Offset(PCALA_LO12)];
 ]
 
 "bgeu" = [
@@ -326,21 +326,21 @@ Ops!(
     // orig_name: bgeu
     Single(0b01101100_00000000_00000000_00000000) , [R, RefOffset] => [R(5), R(5), SImm(10, 12)];
     // orig_name: bgeu
-    Single(0b01101100_00000000_00000000_00000000) , [R, RefLabel] => [R(5), R(5), Offset(PCLO12)];
+    Single(0b01101100_00000000_00000000_00000000) , [R, RefLabel] => [R(5), R(5), Offset(PCALA_LO12)];
 ]
 
 "bne" = [
     Single(0b01011100_00000000_00000000_00000000) , [R, R, Offset] => [R(5), R(0), Offset(SI16)];
     Single(0b01011100_00000000_00000000_00000000) , [R, R, Imm] => [R(5), R(0), Sscaled(10, 16, 2)];
     Single(0b01011100_00000000_00000000_00000000) , [R, RefOffset] => [R(5), R(5), SImm(10, 12)];
-    Single(0b01011100_00000000_00000000_00000000) , [R, RefLabel] => [R(5), R(5), Offset(PCLO12)];
+    Single(0b01011100_00000000_00000000_00000000) , [R, RefLabel] => [R(5), R(5), Offset(PCALA_LO12)];
 ]
 
 "bnez" = [
-    Single(0b01000100_00000000_00000000_00000000) , [R, Offset] => [R(5), Offset(BZ)];
+    Single(0b01000100_00000000_00000000_00000000) , [R, Offset] => [R(5), Offset(B21)];
     Single(0b01000100_00000000_00000000_00000000) , [R, Imm] => [R(5), Sscaled(0, 5, 2)];
     Single(0b01000100_00000000_00000000_00000000) , [R, RefOffset] => [R(5), R(5), SImm(10, 12)];
-    Single(0b01000100_00000000_00000000_00000000) , [R, RefLabel] => [R(5), R(5), Offset(PCLO12)];
+    Single(0b01000100_00000000_00000000_00000000) , [R, RefLabel] => [R(5), R(5), Offset(PCALA_LO12)];
 ]
 
 "break" = [
@@ -743,14 +743,14 @@ Ops!(
     Single(0b00101011_10000000_00000000_00000000) , [F, R, Offset] => [F(0), R(5), Offset(SI12)];
     Single(0b00101011_10000000_00000000_00000000) , [F, R, Imm] => [F(0), R(5), SImm(10, 12)];
     Single(0b00101011_10000000_00000000_00000000) , [F, RefOffset] => [F(0), R(5), SImm(10, 12)];
-    Single(0b00101011_10000000_00000000_00000000) , [F, RefLabel] => [F(0), R(5), Offset(PCLO12)];
+    Single(0b00101011_10000000_00000000_00000000) , [F, RefLabel] => [F(0), R(5), Offset(PCALA_LO12)];
 ]
 
 "fld.s" = [
     Single(0b00101011_00000000_00000000_00000000) , [F, R, Offset] => [F(0), R(5), Offset(SI12)];
     Single(0b00101011_00000000_00000000_00000000) , [F, R, Imm] => [F(0), R(5), SImm(10, 12)];
     Single(0b00101011_00000000_00000000_00000000) , [F, RefOffset] => [F(0), R(5), SImm(10, 12)];
-    Single(0b00101011_00000000_00000000_00000000) , [F, RefLabel] => [F(0), R(5), Offset(PCLO12)];
+    Single(0b00101011_00000000_00000000_00000000) , [F, RefLabel] => [F(0), R(5), Offset(PCALA_LO12)];
 ]
 
 "fldgt.d" = [
@@ -937,14 +937,14 @@ Ops!(
     Single(0b00101011_11000000_00000000_00000000) , [F, R, Offset] => [F(0), R(5), Offset(SI12)];
     Single(0b00101011_11000000_00000000_00000000) , [F, R, Imm] => [F(0), R(5), SImm(10, 12)];
     Single(0b00101011_11000000_00000000_00000000) , [F, RefOffset] => [F(0), R(5), SImm(10, 12)];
-    Single(0b00101011_11000000_00000000_00000000) , [F, RefLabel] => [F(0), R(5), Offset(PCLO12S)];
+    Single(0b00101011_11000000_00000000_00000000) , [F, RefLabel] => [F(0), R(5), Offset(PCALA_LO12)];
 ]
 
 "fst.s" = [
     Single(0b00101011_01000000_00000000_00000000) , [F, R, Offset] => [F(0), R(5), Offset(SI12)];
     Single(0b00101011_01000000_00000000_00000000) , [F, R, Imm] => [F(0), R(5), SImm(10, 12)];
     Single(0b00101011_01000000_00000000_00000000) , [F, RefOffset] => [F(0), R(5), SImm(10, 12)];
-    Single(0b00101011_01000000_00000000_00000000) , [F, RefLabel] => [F(0), R(5), Offset(PCLO12S)];
+    Single(0b00101011_01000000_00000000_00000000) , [F, RefLabel] => [F(0), R(5), Offset(PCALA_LO12)];
 ]
 
 "fstgt.d" = [
@@ -1136,56 +1136,56 @@ Ops!(
     Single(0b01001100_00000000_00000000_00000000) , [R, R, Offset] => [R(0), R(5), Offset(SI16)];
     Single(0b01001100_00000000_00000000_00000000) , [R, R, Imm] => [R(0), R(5), Sscaled(10, 16, 2)];
     Single(0b01001100_00000000_00000000_00000000) , [R, RefOffset] => [R(0), R(5), SImm(10, 12)];
-    Single(0b01001100_00000000_00000000_00000000) , [R, RefLabel] => [R(0), R(5), Offset(PCLO12)];
+    Single(0b01001100_00000000_00000000_00000000) , [R, RefLabel] => [R(0), R(5), Offset(PCALA_LO12)];
 ]
 
 "ld.b" = [
     Single(0b00101000_00000000_00000000_00000000) , [R, R, Offset] => [R(0), R(5), Offset(SI12)];
     Single(0b00101000_00000000_00000000_00000000) , [R, R, Imm] => [R(0), R(5), SImm(10, 12)];
     Single(0b00101000_00000000_00000000_00000000) , [R, RefOffset] => [R(0), R(5), SImm(10, 12)];
-    Single(0b00101000_00000000_00000000_00000000) , [R, RefLabel] => [R(0), R(5), Offset(PCLO12)];
+    Single(0b00101000_00000000_00000000_00000000) , [R, RefLabel] => [R(0), R(5), Offset(PCALA_LO12)];
 ]
 
 "ld.bu" = [
     Single(0b00101010_00000000_00000000_00000000) , [R, R, Offset] => [R(0), R(5), Offset(SI12)];
     Single(0b00101010_00000000_00000000_00000000) , [R, R, Imm] => [R(0), R(5), SImm(10, 12)];
     Single(0b00101010_00000000_00000000_00000000) , [R, RefOffset] => [R(0), R(5), SImm(10, 12)];
-    Single(0b00101010_00000000_00000000_00000000) , [R, RefLabel] => [R(0), R(5), Offset(PCLO12)];
+    Single(0b00101010_00000000_00000000_00000000) , [R, RefLabel] => [R(0), R(5), Offset(PCALA_LO12)];
 ]
 
 "ld.d" = [
     Single(0b00101000_11000000_00000000_00000000) , [R, R, Offset] => [R(0), R(5), Offset(SI12)];
     Single(0b00101000_11000000_00000000_00000000) , [R, R, Imm] => [R(0), R(5), SImm(10, 12)];
     Single(0b00101000_11000000_00000000_00000000) , [R, RefOffset] => [R(0), R(5), SImm(10, 12)];
-    Single(0b00101000_11000000_00000000_00000000) , [R, RefLabel] => [R(0), R(5), Offset(PCLO12)];
+    Single(0b00101000_11000000_00000000_00000000) , [R, RefLabel] => [R(0), R(5), Offset(PCALA_LO12)];
 ]
 
 "ld.h" = [
     Single(0b00101000_01000000_00000000_00000000) , [R, R, Offset] => [R(0), R(5), Offset(SI12)];
     Single(0b00101000_01000000_00000000_00000000) , [R, R, Imm] => [R(0), R(5), SImm(10, 12)];
     Single(0b00101000_01000000_00000000_00000000) , [R, RefOffset] => [R(0), R(5), SImm(10, 12)];
-    Single(0b00101000_01000000_00000000_00000000) , [R, RefLabel] => [R(0), R(5), Offset(PCLO12)];
+    Single(0b00101000_01000000_00000000_00000000) , [R, RefLabel] => [R(0), R(5), Offset(PCALA_LO12)];
 ]
 
 "ld.hu" = [
     Single(0b00101010_01000000_00000000_00000000) , [R, R, Offset] => [R(0), R(5), Offset(SI12)];
     Single(0b00101010_01000000_00000000_00000000) , [R, R, Imm] => [R(0), R(5), SImm(10, 12)];
     Single(0b00101010_01000000_00000000_00000000) , [R, RefOffset] => [R(0), R(5), SImm(10, 12)];
-    Single(0b00101010_01000000_00000000_00000000) , [R, RefLabel] => [R(0), R(5), Offset(PCLO12)];
+    Single(0b00101010_01000000_00000000_00000000) , [R, RefLabel] => [R(0), R(5), Offset(PCALA_LO12)];
 ]
 
 "ld.w" = [
     Single(0b00101000_10000000_00000000_00000000) , [R, R, Offset] => [R(0), R(5), Offset(SI12)];
     Single(0b00101000_10000000_00000000_00000000) , [R, R, Imm] => [R(0), R(5), SImm(10, 12)];
     Single(0b00101000_10000000_00000000_00000000) , [R, RefOffset] => [R(0), R(5), SImm(10, 12)];
-    Single(0b00101000_10000000_00000000_00000000) , [R, RefLabel] => [R(0), R(5), Offset(PCLO12)];
+    Single(0b00101000_10000000_00000000_00000000) , [R, RefLabel] => [R(0), R(5), Offset(PCALA_LO12)];
 ]
 
 "ld.wu" = [
     Single(0b00101010_10000000_00000000_00000000) , [R, R, Offset] => [R(0), R(5), Offset(SI12)];
     Single(0b00101010_10000000_00000000_00000000) , [R, R, Imm] => [R(0), R(5), SImm(10, 12)];
     Single(0b00101010_10000000_00000000_00000000) , [R, RefOffset] => [R(0), R(5), SImm(10, 12)];
-    Single(0b00101010_10000000_00000000_00000000) , [R, RefLabel] => [R(0), R(5), Offset(PCLO12)];
+    Single(0b00101010_10000000_00000000_00000000) , [R, RefLabel] => [R(0), R(5), Offset(PCALA_LO12)];
 ]
 
 "lddir" = [
@@ -1232,7 +1232,7 @@ Ops!(
     // orig_name: ldptr.d
     Single(0b00100110_00000000_00000000_00000000) , [R, RefOffset] => [R(0), R(5), SImm(10, 12)];
     // orig_name: ldptr.d
-    Single(0b00100110_00000000_00000000_00000000) , [R, RefLabel] => [R(0), R(5), Offset(PCLO12)];
+    Single(0b00100110_00000000_00000000_00000000) , [R, RefLabel] => [R(0), R(5), Offset(PCALA_LO12)];
 ]
 
 "ldptr.w" = [
@@ -1243,7 +1243,7 @@ Ops!(
     // orig_name: ldptr.w
     Single(0b00100100_00000000_00000000_00000000) , [R, RefOffset] => [R(0), R(5), SImm(10, 12)];
     // orig_name: ldptr.w
-    Single(0b00100100_00000000_00000000_00000000) , [R, RefLabel] => [R(0), R(5), Offset(PCLO12)];
+    Single(0b00100100_00000000_00000000_00000000) , [R, RefLabel] => [R(0), R(5), Offset(PCALA_LO12)];
 ]
 
 "ldpte" = [
@@ -1282,14 +1282,14 @@ Ops!(
     Single(0b00100010_00000000_00000000_00000000) , [R, R, Offset] => [R(0), R(5), Offset(SI14)];
     Single(0b00100010_00000000_00000000_00000000) , [R, R, Imm] => [R(0), R(5), Sscaled(10, 14, 2)];
     Single(0b00100010_00000000_00000000_00000000) , [R, RefOffset] => [R(0), R(5), SImm(10, 12)];
-    Single(0b00100010_00000000_00000000_00000000) , [R, RefLabel] => [R(0), R(5), Offset(PCLO12)];
+    Single(0b00100010_00000000_00000000_00000000) , [R, RefLabel] => [R(0), R(5), Offset(PCALA_LO12)];
 ]
 
 "ll.w" = [
     Single(0b00100000_00000000_00000000_00000000) , [R, R, Offset] => [R(0), R(5), Offset(SI14)];
     Single(0b00100000_00000000_00000000_00000000) , [R, R, Imm] => [R(0), R(5), Sscaled(10, 14, 2)];
     Single(0b00100000_00000000_00000000_00000000) , [R, RefOffset] => [R(0), R(5), SImm(10, 12)];
-    Single(0b00100000_00000000_00000000_00000000) , [R, RefLabel] => [R(0), R(5), Offset(PCLO12)];
+    Single(0b00100000_00000000_00000000_00000000) , [R, RefLabel] => [R(0), R(5), Offset(PCALA_LO12)];
 ]
 
 "llacq.d" = [
@@ -1421,35 +1421,35 @@ Ops!(
 ]
 
 "pcaddu12i" = [
-    Single(0b00011100_00000000_00000000_00000000) , [R, Offset] => [R(0), Offset(SI20)];
+    Single(0b00011100_00000000_00000000_00000000) , [R, Offset] => [R(0), Offset(ABS_HI20)];
     Single(0b00011100_00000000_00000000_00000000) , [R, Imm] => [R(0), SImm(5, 20)];
     Single(0b00011100_00000000_00000000_00000000) , [R, RefOffset] => [R(0), R(5), SImm(10, 12)];
-    Single(0b00011100_00000000_00000000_00000000) , [R, RefLabel] => [R(0), R(5), Offset(PCLO12)];
+    Single(0b00011100_00000000_00000000_00000000) , [R, RefLabel] => [R(0), R(5), Offset(PCALA_LO12)];
 ]
 
 "pcaddu18i" = [
-    Single(0b00011110_00000000_00000000_00000000) , [R, Offset] => [R(0), Offset(SI20)];
+    Single(0b00011110_00000000_00000000_00000000) , [R, Offset] => [R(0), Offset(ABS_HI20)];
     Single(0b00011110_00000000_00000000_00000000) , [R, Imm] => [R(0), SImm(5, 20)];
     Single(0b00011110_00000000_00000000_00000000) , [R, RefOffset] => [R(0), R(5), SImm(10, 12)];
-    Single(0b00011110_00000000_00000000_00000000) , [R, RefLabel] => [R(0), R(5), Offset(PCLO12)];
+    Single(0b00011110_00000000_00000000_00000000) , [R, RefLabel] => [R(0), R(5), Offset(PCALA_LO12)];
 ]
 
 "pcaddi" = [
     // orig_name: pcaddi
-    Single(0b00011000_00000000_00000000_00000000) , [R, Offset] => [R(0), Offset(SI20)];
+    Single(0b00011000_00000000_00000000_00000000) , [R, Offset] => [R(0), Offset(ABS_HI20)];
     // orig_name: pcaddi
     Single(0b00011000_00000000_00000000_00000000) , [R, Imm] => [R(0), SImm(5, 20)];
     // orig_name: pcaddi
     Single(0b00011000_00000000_00000000_00000000) , [R, RefOffset] => [R(0), R(5), SImm(10, 12)];
     // orig_name: pcaddi
-    Single(0b00011000_00000000_00000000_00000000) , [R, RefLabel] => [R(0), R(5), Offset(PCLO12)];
+    Single(0b00011000_00000000_00000000_00000000) , [R, RefLabel] => [R(0), R(5), Offset(PCALA_LO12)];
 ]
 
 "pcalau12i" = [
-    Single(0b00011010_00000000_00000000_00000000) , [R, Offset] => [R(0), Offset(SI20)];
+    Single(0b00011010_00000000_00000000_00000000) , [R, Offset] => [R(0), Offset(ABS_HI20)];
     Single(0b00011010_00000000_00000000_00000000) , [R, Imm] => [R(0), SImm(5, 20)];
     Single(0b00011010_00000000_00000000_00000000) , [R, RefOffset] => [R(0), R(5), SImm(10, 12)];
-    Single(0b00011010_00000000_00000000_00000000) , [R, RefLabel] => [R(0), R(5), Offset(PCLO12)];
+    Single(0b00011010_00000000_00000000_00000000) , [R, RefLabel] => [R(0), R(5), Offset(PCALA_LO12)];
 ]
 
 "preld" = [
@@ -1536,7 +1536,7 @@ Ops!(
     Single(0b00100011_00000000_00000000_00000000) , [R, R, Offset] => [R(0), R(5), Offset(SI14)];
     Single(0b00100011_00000000_00000000_00000000) , [R, R, Imm] => [R(0), R(5), Sscaled(10, 14, 2)];
     Single(0b00100011_00000000_00000000_00000000) , [R, RefOffset] => [R(0), R(5), SImm(10, 12)];
-    Single(0b00100011_00000000_00000000_00000000) , [R, RefLabel] => [R(0), R(5), Offset(PCLO12)];
+    Single(0b00100011_00000000_00000000_00000000) , [R, RefLabel] => [R(0), R(5), Offset(PCALA_LO12)];
 ]
 
 "sc.q" = [
@@ -1547,7 +1547,7 @@ Ops!(
     Single(0b00100001_00000000_00000000_00000000) , [R, R, Offset] => [R(0), R(5), Offset(SI14)];
     Single(0b00100001_00000000_00000000_00000000) , [R, R, Imm] => [R(0), R(5), Sscaled(10, 14, 2)];
     Single(0b00100001_00000000_00000000_00000000) , [R, RefOffset] => [R(0), R(5), SImm(10, 12)];
-    Single(0b00100001_00000000_00000000_00000000) , [R, RefLabel] => [R(0), R(5), Offset(PCLO12)];
+    Single(0b00100001_00000000_00000000_00000000) , [R, RefLabel] => [R(0), R(5), Offset(PCALA_LO12)];
 ]
 
 "screl.d" = [
@@ -1651,28 +1651,28 @@ Ops!(
     Single(0b00101001_00000000_00000000_00000000) , [R, R, Offset] => [R(0), R(5), Offset(SI12)];
     Single(0b00101001_00000000_00000000_00000000) , [R, R, Imm] => [R(0), R(5), SImm(10, 12)];
     Single(0b00101001_00000000_00000000_00000000) , [R, RefOffset] => [R(0), R(5), SImm(10, 12)];
-    Single(0b00101001_00000000_00000000_00000000) , [R, RefLabel] => [R(0), R(5), Offset(PCLO12S)];
+    Single(0b00101001_00000000_00000000_00000000) , [R, RefLabel] => [R(0), R(5), Offset(PCALA_LO12)];
 ]
 
 "st.d" = [
     Single(0b00101001_11000000_00000000_00000000) , [R, R, Offset] => [R(0), R(5), Offset(SI12)];
     Single(0b00101001_11000000_00000000_00000000) , [R, R, Imm] => [R(0), R(5), SImm(10, 12)];
     Single(0b00101001_11000000_00000000_00000000) , [R, RefOffset] => [R(0), R(5), SImm(10, 12)];
-    Single(0b00101001_11000000_00000000_00000000) , [R, RefLabel] => [R(0), R(5), Offset(PCLO12S)];
+    Single(0b00101001_11000000_00000000_00000000) , [R, RefLabel] => [R(0), R(5), Offset(PCALA_LO12)];
 ]
 
 "st.h" = [
     Single(0b00101001_01000000_00000000_00000000) , [R, R, Offset] => [R(0), R(5), Offset(SI12)];
     Single(0b00101001_01000000_00000000_00000000) , [R, R, Imm] => [R(0), R(5), SImm(10, 12)];
     Single(0b00101001_01000000_00000000_00000000) , [R, RefOffset] => [R(0), R(5), SImm(10, 12)];
-    Single(0b00101001_01000000_00000000_00000000) , [R, RefLabel] => [R(0), R(5), Offset(PCLO12S)];
+    Single(0b00101001_01000000_00000000_00000000) , [R, RefLabel] => [R(0), R(5), Offset(PCALA_LO12)];
 ]
 
 "st.w" = [
     Single(0b00101001_10000000_00000000_00000000) , [R, R, Offset] => [R(0), R(5), Offset(SI12)];
     Single(0b00101001_10000000_00000000_00000000) , [R, R, Imm] => [R(0), R(5), SImm(10, 12)];
     Single(0b00101001_10000000_00000000_00000000) , [R, RefOffset] => [R(0), R(5), SImm(10, 12)];
-    Single(0b00101001_10000000_00000000_00000000) , [R, RefLabel] => [R(0), R(5), Offset(PCLO12S)];
+    Single(0b00101001_10000000_00000000_00000000) , [R, RefLabel] => [R(0), R(5), Offset(PCALA_LO12)];
 ]
 
 "stgt.b" = [
@@ -1715,7 +1715,7 @@ Ops!(
     // orig_name: stptr.d
     Single(0b00100111_00000000_00000000_00000000) , [R, RefOffset] => [R(0), R(5), SImm(10, 12)];
     // orig_name: stptr.d
-    Single(0b00100111_00000000_00000000_00000000) , [R, RefLabel] => [R(0), R(5), Offset(PCLO12)];
+    Single(0b00100111_00000000_00000000_00000000) , [R, RefLabel] => [R(0), R(5), Offset(PCALA_LO12)];
 ]
 
 "stptr.w" = [
@@ -1726,7 +1726,7 @@ Ops!(
     // orig_name: stptr.w
     Single(0b00100101_00000000_00000000_00000000) , [R, RefOffset] => [R(0), R(5), SImm(10, 12)];
     // orig_name: stptr.w
-    Single(0b00100101_00000000_00000000_00000000) , [R, RefLabel] => [R(0), R(5), Offset(PCLO12)];
+    Single(0b00100101_00000000_00000000_00000000) , [R, RefLabel] => [R(0), R(5), Offset(PCALA_LO12)];
 ]
 
 "stx.b" = [

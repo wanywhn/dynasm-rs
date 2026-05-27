@@ -183,7 +183,7 @@ func generateOpmapFile(path string, insns []InsnDescription) error {
 
 			// 生成处理器列表
 			// RefOffset expands to base register + offset, so we emit R(5) + offset command
-			// RefLabel expands to base register + jump target, so we emit R(5) + Offset(PCLO12/PCLO12S)
+			// RefLabel expands to base register + jump target, so we emit R(5) + Offset(PCALA_LO12)
 			var procList []string
 
 			for idx, arg := range args {
@@ -191,12 +191,8 @@ func generateOpmapFile(path string, insns []InsnDescription) error {
 					procList = append(procList, "R(5)", "SImm(10, 12)")
 				} else if arg.Kind == ArgKindRefLabel {
 					// RefLabel expands to base register + jump target in flatten_args.
-					// For load instructions use PCLO12, for store instructions use PCLO12S.
-					reloc := "PCLO12"
-					if strings.HasPrefix(mnemonic, "st.") || strings.HasPrefix(mnemonic, "fst.") {
-						reloc = "PCLO12S"
-					}
-					procList = append(procList, "R(5)", "Offset("+reloc+")")
+					// All load/store instructions use PCALA_LO12 relocation (P3: merged PCLO12S).
+					procList = append(procList, "R(5)", "Offset(PCALA_LO12)")
 				} else {
 					procList = append(procList, argToProcessor(mnemonic, idx, arg))
 				}
@@ -514,7 +510,7 @@ func addRefOffsetVariants(descs []InsnDescription, load_store_insn map[string]Ar
 // addRefLabelVariants generates [dest_reg, RefLabel] entries for PC-relative
 // load/store instructions, enabling [base, <label>] syntax.
 // The RefLabel matcher expands to Register(base) + JumpTarget(jump) in flatten_args.
-// Store instructions use PCLO12S relocation, load instructions use PCLO12.
+// All instructions use PCALA_LO12 relocation (P3: merged PCLO12S).
 func addRefLabelVariants(descs []InsnDescription, load_store_insn map[string]ArgKind) []InsnDescription {
 	var result []InsnDescription
 
@@ -784,14 +780,14 @@ func argToProcessor(mnemonic string, idx int, arg *Arg) string {
 			mnemonic == "blt" || mnemonic == "bge" ||
 			mnemonic == "bltu" || mnemonic == "bgeu" ||
 			mnemonic == "jirl" {
-			return "Offset(B)"
+			return "Offset(B16)"
 		} else if mnemonic == "b" || mnemonic == "bl" {
-			return "Offset(J)"
+			return "Offset(B26)"
 		} else if mnemonic == "beqz" || mnemonic == "bnez" ||
 			mnemonic == "bceqz" || mnemonic == "bcnez" {
-			return "Offset(BZ)"
+			return "Offset(B21)"
 		}
-		return "Offset(SI20)"
+		return "Offset(ABS_HI20)"
 	case ArgKindOffsetSI14:
 		return "Offset(SI14)"
 	case ArgKindOffsetSI12:
@@ -799,7 +795,7 @@ func argToProcessor(mnemonic string, idx int, arg *Arg) string {
 	case ArgKindOffsetSI16:
 		return "Offset(SI16)"
 	case ArgKindOffsetSI26:
-		return "Offset(J)"
+		return "Offset(B26)"
 	default:
 		return "Unknown"
 	}
