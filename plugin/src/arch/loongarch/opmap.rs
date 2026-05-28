@@ -1423,14 +1423,14 @@ Ops!(
 "pcaddu12i" = [
     Single(0b00011100_00000000_00000000_00000000) , [R, Imm] => [R(0), SImm(5, 20)];
     Single(0b00011100_00000000_00000000_00000000) , [R, RefOffset] => [R(0), R(5), SImm(10, 12)];
-    Single(0b00011100_00000000_00000000_00000000) , [R, RefLabel] => [R(0), R(5), Offset(PCALA_LO12)];
+    Single(0b00011100_00000000_00000000_00000000) , [R, RefLabel] => [R(0), R(5), Offset(PCADD_SHIFT12)];
     Single(0b00011100_00000000_00000000_00000000) , [R, Offset] => [R(0), Offset(PCADD_SHIFT12)];
 ]
 
 "pcaddu18i" = [
     Single(0b00011110_00000000_00000000_00000000) , [R, Imm] => [R(0), SImm(5, 20)];
     Single(0b00011110_00000000_00000000_00000000) , [R, RefOffset] => [R(0), R(5), SImm(10, 12)];
-    Single(0b00011110_00000000_00000000_00000000) , [R, RefLabel] => [R(0), R(5), Offset(PCALA_LO12)];
+    Single(0b00011110_00000000_00000000_00000000) , [R, RefLabel] => [R(0), R(5), Offset(PCADD_SHIFT18)];
     Single(0b00011110_00000000_00000000_00000000) , [R, Offset] => [R(0), Offset(PCADD_SHIFT18)];
 ]
 
@@ -1440,7 +1440,7 @@ Ops!(
     // orig_name: pcaddi
     Single(0b00011000_00000000_00000000_00000000) , [R, RefOffset] => [R(0), R(5), SImm(10, 12)];
     // orig_name: pcaddi
-    Single(0b00011000_00000000_00000000_00000000) , [R, RefLabel] => [R(0), R(5), Offset(PCALA_LO12)];
+    Single(0b00011000_00000000_00000000_00000000) , [R, RefLabel] => [R(0), R(5), Offset(PCADD_SHIFT2)];
     // orig_name: pcaddi
     Single(0b00011000_00000000_00000000_00000000) , [R, Offset] => [R(0), Offset(PCADD_SHIFT2)];
 ]
@@ -1448,7 +1448,7 @@ Ops!(
 "pcalau12i" = [
     Single(0b00011010_00000000_00000000_00000000) , [R, Imm] => [R(0), SImm(5, 20)];
     Single(0b00011010_00000000_00000000_00000000) , [R, RefOffset] => [R(0), R(5), SImm(10, 12)];
-    Single(0b00011010_00000000_00000000_00000000) , [R, RefLabel] => [R(0), R(5), Offset(PCALA_LO12)];
+    Single(0b00011010_00000000_00000000_00000000) , [R, RefLabel] => [R(0), R(5), Offset(PCADD_SHIFT12)];
     Single(0b00011010_00000000_00000000_00000000) , [R, Offset] => [R(0), Offset(PCALA_HI20)];
 ]
 

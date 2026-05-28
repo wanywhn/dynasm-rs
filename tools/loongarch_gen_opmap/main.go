@@ -216,8 +216,21 @@ func generateOpmapFile(path string, insns []InsnDescription) error {
 					procList = append(procList, "R(5)", "SImm(10, 12)")
 				} else if arg.Kind == ArgKindRefLabel {
 					// RefLabel expands to base register + jump target in flatten_args.
-					// All load/store instructions use PCALA_LO12 relocation (P3: merged PCLO12S).
-					procList = append(procList, "R(5)", "Offset(PCALA_LO12)")
+					// PC-relative arithmetic instructions (pcaddi/pcalau12i/pcaddu12i/pcaddu18i)
+					// use a 20-bit si20 field, so they need PCADD_SHIFT* relocations that
+					// encode the full 20 bits. Load/store instructions use PCALA_LO12 (si12,
+					// sign-extended to 64 bits at decode time).
+					pcAddInsnRelocs := map[string]string{
+						"pcaddi":    "PCADD_SHIFT2",
+						"pcaddu12i": "PCADD_SHIFT12",
+						"pcaddu18i": "PCADD_SHIFT18",
+						"pcalau12i": "PCADD_SHIFT12",
+					}
+					if reloc, ok := pcAddInsnRelocs[mnemonic]; ok {
+						procList = append(procList, "R(5)", "Offset("+reloc+")")
+					} else {
+						procList = append(procList, "R(5)", "Offset(PCALA_LO12)")
+					}
 				} else {
 					procList = append(procList, argToProcessor(mnemonic, idx, arg))
 				}
