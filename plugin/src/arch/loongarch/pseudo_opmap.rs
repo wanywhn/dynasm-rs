@@ -6,12 +6,12 @@ PseudoOps!(
     "la" = [
         Double(0x1A000000, 0x02C00000) ,
         0x03 , &[ExtensionFlags::Ex_BASE] ,
-        [R, Offset] => [R(0), Repeat, R(5+32), Offset(SPLIT_PCALA)] ;
+        [R, Offset] => [Rno0(0), Repeat, R(0+32), Repeat, R(5+32), Offset(SPLIT_PCALA)] ;
     ]
     "la.local" = [
         Double(0x1A000000, 0x02C00000) ,
         0x03 , &[ExtensionFlags::Ex_BASE] ,
-        [R, Offset] => [R(0), Repeat, R(5+32), Offset(SPLIT_PCALA)] ;
+        [R, Offset] => [Rno0(0), Repeat, R(0+32), Repeat, R(5+32), Offset(SPLIT_PCALA)] ;
     ]
     "call36" = [
         Double(0x1E000001, 0x4C000021) ,
