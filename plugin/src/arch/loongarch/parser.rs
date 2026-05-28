@@ -1,11 +1,35 @@
 use std::collections::HashMap;
 
+use proc_macro2::Span;
+
 use syn::spanned::Spanned;
 use syn::{parse, Token};
 use lazy_static::lazy_static;
 
 use crate::parse_helpers::{parse_ident_or_rust_keyword, ParseOptExt};
 use super::{Context, ast};
+
+/// Post-parse alias rewriting for pseudo-instructions that transform user-supplied args.
+/// `move $rd, $src` → `or $rd, $src, $r0` (append $r0)
+/// `jr $rj` → `jirl $r0, $rj, 0` (prepend $r0, append 0)
+fn apply_post_parse_aliases(name: String, args: Vec<ast::RawArg>, span: Span) -> (String, Vec<ast::RawArg>) {
+    match name.as_str() {
+        "move" => {
+            let mut new_args = args;
+            new_args.push(ast::RawArg::Register { span, reg: ast::Register::Static(ast::RegId::R0) });
+            ("or".to_string(), new_args)
+        },
+        "jr" => {
+            let mut new_args = vec![
+                ast::RawArg::Register { span, reg: ast::Register::Static(ast::RegId::R0) },
+            ];
+            new_args.extend(args);
+            new_args.push(ast::RawArg::Immediate { value: syn::parse_quote!(0) });
+            ("jirl".to_string(), new_args)
+        },
+        _ => (name, args),
+    }
+}
 
 // Syntax for a single op: ident ("." ident)* (arg ("," arg)*)? ";"
 pub(super) fn parse_instruction(ctx: &mut Context, input: parse::ParseStream) -> parse::Result<ast::ParsedInstruction> {
@@ -28,7 +52,30 @@ pub(super) fn parse_instruction(ctx: &mut Context, input: parse::ParseStream) ->
 
     }
 
+    // InstAlias rewriting: translate pseudo mnemonics to real instructions
+    // before parsing arguments. This avoids adding new opmap entries
+    // for instructions that are just existing instructions with fixed operands.
+    let (name, pre_injected) = match name.as_str() {
+        "nop" => ("andi".to_string(), vec![
+            ast::RawArg::Register { span, reg: ast::Register::Static(ast::RegId::R0) },
+            ast::RawArg::Register { span, reg: ast::Register::Static(ast::RegId::R0) },
+            ast::RawArg::Immediate { value: syn::parse_quote!(0) },
+        ]),
+        "ret" => ("jirl".to_string(), vec![
+            ast::RawArg::Register { span, reg: ast::Register::Static(ast::RegId::R0) },
+            ast::RawArg::Register { span, reg: ast::Register::Static(ast::RegId::R1) },
+            ast::RawArg::Immediate { value: syn::parse_quote!(0) },
+        ]),
+        // Default call/tail aliases: "call" → call36 (LA64 default), "tail" → tail36
+        "call" => ("call36".to_string(), Vec::new()),
+        "tail" => ("tail36".to_string(), Vec::new()),
+        _ => (name, Vec::new()),
+    };
+
     let mut args = Vec::new();
+
+    // Inject pre-parsed args for aliases like nop/ret that take no user arguments
+    args.extend(pre_injected);
 
     // Parse 0 or more comma-separated args
     if !(input.is_empty() || input.peek(Token![;])) {
@@ -39,6 +86,9 @@ pub(super) fn parse_instruction(ctx: &mut Context, input: parse::ParseStream) ->
             args.push(parse_arg(ctx, input)?);
         }
     }
+
+    // Post-parse alias rewriting: aliases that transform user-supplied args
+    let (name, args) = apply_post_parse_aliases(name, args, span);
 
     Ok(ast::ParsedInstruction {
         name,

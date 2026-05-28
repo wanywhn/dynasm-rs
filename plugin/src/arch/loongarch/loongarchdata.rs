@@ -182,6 +182,26 @@ pub enum Command {
     Sfields(&'static [u8]),
     /// Jump offset
     Offset(Relocation),
+    /// Encode a slice of bits from an immediate value.
+    /// format: `(offset, bits, value_offset)`
+    /// Encodes `bits` bits from `value >> value_offset` at instruction bit position `offset`.
+    /// The `offset` may include `+32` to target the second instruction in a Double template.
+    BitRange(u8, u8, u8),
+    /// Encode a slice of bits from an immediate value with rounding compensation.
+    /// format: `(offset, bits, value_offset)`
+    /// Adds `1 << (value_offset - 1)` to value before extracting the bits.
+    /// Used for hi20 fields that need +0x800 or +0x20000 compensation.
+    /// The `offset` may include `+32` to target the second instruction in a Double template.
+    RBitRange(u8, u8, u8),
+    /// Large immediate value (>32 bits). Declares that the immediate argument is
+    /// `bitlen` bits wide, enabling BitRange/RBitRange to extract different bit ranges.
+    BigImm(u8),
+    /// li.w pseudo-instruction: lu12i.w + ori pair with +0x800 compensation
+    /// Encodes hi20 at bits [24:5] of first inst, lo12 at bits [21:10] of second inst
+    LiW32,
+    /// li.d pseudo-instruction: lu12i.w + ori + lu32i.d + lu52i.d (4-instruction sequence)
+    /// Encodes 64-bit immediate across 4 instructions with appropriate compensation
+    LiD64,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -230,6 +250,18 @@ pub enum Relocation {
     PCADD_SHIFT12 = 15,
     // pcaddu18i: PC + SE({si20, 18'b0}). Encode shift >>18, +0x20000 compensation.
     PCADD_SHIFT18 = 16,
+    // 8-byte SPLIT relocation: pcalau12i + addi.d pair.
+    // Patches hi20 (with +0x800 compensation) into first instruction,
+    // lo12 into second instruction. Used by la/la.local pseudo-instructions.
+    SPLIT_PCALA = 17,
+    // 8-byte SPLIT relocation: pcaddu12i + jirl pair (call30).
+    // hi20 = val[31:12] at bits [24:5] of first inst (no compensation).
+    // lo10 = val[11:2] at bits [25:10] of second inst (setK16).
+    SPLIT_CALL30 = 18,
+    // 8-byte SPLIT relocation: pcaddu18i + jirl pair (call36).
+    // hi20 = (val+0x20000)[37:18] at bits [24:5] of first inst (+0x20000 compensation).
+    // lo16 = val[17:2] at bits [25:10] of second inst (setK16).
+    SPLIT_CALL36 = 19,
     // 8-bit literal
     LITERAL8 = 9,
     // 16-bit literal
@@ -259,6 +291,9 @@ impl Relocation {
         (14, "PCADD_SHIFT2"),
         (15, "PCADD_SHIFT12"),
         (16, "PCADD_SHIFT18"),
+        (17, "SPLIT_PCALA"),
+        (18, "SPLIT_CALL30"),
+        (19, "SPLIT_CALL36"),
         (9, "LITERAL8"),
         (10, "LITERAL16"),
         (11, "LITERAL32"),
@@ -285,6 +320,7 @@ impl Relocation {
             | Relocation::PCADD_SHIFT2
             | Relocation::PCADD_SHIFT12
             | Relocation::PCADD_SHIFT18 => 4,
+            Relocation::SPLIT_PCALA | Relocation::SPLIT_CALL30 | Relocation::SPLIT_CALL36 => 8,
             Relocation::LITERAL64 => 8,
         }
     }
@@ -335,12 +371,51 @@ macro_rules! SingleOp {
 }
 
 macro_rules! Ops {
+    // Single template: "name" = [ Single(template) , [matchers] => [commands]; ]
     ( $( $name:tt = [ $( $base:expr , [ $( $matcher:expr ),* ] => [ $( $command:expr ),* ] ; )+ ] )* ) => {
         [ $(
             (
                 $name,
                 &[ $(
                     SingleOp!( $base, [ $( $matcher ),* ], [ $( $command ),* ] )
+                ),+ ] as &[_]
+            )
+        ),* ]
+    }
+}
+
+/// Extended version of Ops! macro that supports Single, Double, and Many templates.
+/// Used for pseudo-instructions that need multi-instruction templates.
+/// Each entry takes: template, isa_flags_bits, ext_flags_slice, matchers, commands
+macro_rules! PseudoOps {
+    ( $( $name:tt = [ $( $template:expr , $isa_bits:expr , $ext:expr , [ $( $matcher:expr ),* ] => [ $( $command:expr ),* ] ; )+ ] )* ) => {
+        [ $(
+            (
+                $name,
+                &[ $(
+                    {
+                        const MATCHERS: &'static [Matcher] = {
+                            #[allow(unused_imports)]
+                            use self::Matcher::*;
+                            &[ $(
+                                $matcher
+                            ),* ]
+                        };
+                        const COMMANDS: &'static [Command] = {
+                            #[allow(unused_imports)]
+                            use self::Command::*;
+                            &[ $(
+                                $command
+                            ),* ]
+                        };
+                        Opdata {
+                            isa_flags: ISAFlags::from_bits_truncate($isa_bits),
+                            ext_flags: $ext,
+                            template: $template,
+                            matchers: MATCHERS,
+                            commands: COMMANDS,
+                        }
+                    }
                 ),+ ] as &[_]
             )
         ),* ]
@@ -359,7 +434,19 @@ pub fn mnemonics() -> hash_map::Keys<'static, &'static str, &'static [Opdata]> {
 lazy_static! {
     static ref OPMAP: HashMap<&'static str, &'static [Opdata]> = {
         use self::Relocation::*;
+        use self::Template::*;
+        use self::Matcher::*;
+        use self::Command::*;
+
         static MAP: &[(&str, &[Opdata])] = &include!("opmap.rs");
-        MAP.iter().cloned().collect()
+
+        // Pseudo-instructions (generated by gen-opmap, not from opcode database)
+        static PSEUDO_MAP: &[(&str, &[Opdata])] = &include!("pseudo_opmap.rs");
+
+        let mut map: HashMap<&str, &[Opdata]> = MAP.iter().cloned().collect();
+        for (name, data) in PSEUDO_MAP.iter() {
+            map.insert(name, data);
+        }
+        map
     };
 }

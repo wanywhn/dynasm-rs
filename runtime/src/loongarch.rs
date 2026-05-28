@@ -48,6 +48,18 @@ pub enum LoongArchRelocation {
     PCADD_SHIFT12,
     // pcaddu18i: PC + SE({si20, 18'b0}). Encode shift >>18, +0x20000 compensation.
     PCADD_SHIFT18,
+    // 8-byte SPLIT relocation: pcalau12i + addi.d pair.
+    // Patches hi20 (with +0x800 compensation) into first instruction,
+    // lo12 into second instruction. Used by la/la.local pseudo-instructions.
+    SPLIT_PCALA,
+    // 8-byte SPLIT relocation: pcaddu12i + jirl pair (call30).
+    // hi20 = val[31:12] at bits [24:5] of first inst (no compensation).
+    // lo10 = val[11:2] at bits [25:10] of second inst (setK16).
+    SPLIT_CALL30,
+    // 8-byte SPLIT relocation: pcaddu18i + jirl pair (call36).
+    // hi20 = (val+0x20000)[37:18] at bits [24:5] of first inst (+0x20000 compensation).
+    // lo16 = val[17:2] at bits [25:10] of second inst (setK16).
+    SPLIT_CALL36,
     Plain(RelocationSize),
 }
 
@@ -65,6 +77,7 @@ impl LoongArchRelocation {
             Self::SI12 => 0xFFC0_03FF,
             Self::PCALA_LO12 => 0xFFC0_03FF,
             Self::PCALA_HI20 => 0xFE00_001F,
+            Self::SPLIT_PCALA | Self::SPLIT_CALL30 | Self::SPLIT_CALL36 => 0,  // SPLIT variants bypass op_mask/encode
             Self::Plain(_) => 0,
         }
     }
@@ -153,7 +166,7 @@ impl LoongArchRelocation {
                 }
                 ((value >> 12) as u32 & 0xF_FFFF) << 5
             },
-            Self::Plain(_) => return Err(ImpossibleRelocation {}),
+            Self::SPLIT_PCALA | Self::SPLIT_CALL30 | Self::SPLIT_CALL36 | Self::Plain(_) => return Err(ImpossibleRelocation {}),
         })
     }
 }
@@ -174,6 +187,9 @@ impl Relocation for LoongArchRelocation {
             14 => Self::PCADD_SHIFT2,
             15 => Self::PCADD_SHIFT12,
             16 => Self::PCADD_SHIFT18,
+            17 => Self::SPLIT_PCALA,
+            18 => Self::SPLIT_CALL30,
+            19 => Self::SPLIT_CALL36,
             x => Self::Plain(RelocationSize::from_encoding(x)),
         }
     }
@@ -182,6 +198,7 @@ impl Relocation for LoongArchRelocation {
     }
     fn size(&self) -> usize {
         match self {
+            Self::SPLIT_PCALA | Self::SPLIT_CALL30 | Self::SPLIT_CALL36 => 8,
             Self::Plain(s) => s.size(),
             _ => RelocationSize::DWord.size(),
         }
@@ -190,6 +207,65 @@ impl Relocation for LoongArchRelocation {
         if let Self::Plain(s) = self {
             return s.write_value(buf, value);
         };
+
+        // SPLIT relocations patch across two instructions directly, bypassing
+        // the generic op_mask()+encode()+OR pattern.
+        match self {
+            Self::SPLIT_PCALA => {
+                // pcalau12i rd, hi20; addi.d rd, rd, lo12
+                // hi20 = (val + 0x800)[31:12] at bits [24:5] of first inst
+                // lo12 = val[11:0] at bits [21:10] of second inst
+                // Range: -0x8000_0800..0x7FFF_F7FF (sign-extension interaction limits)
+                // Values at the edges lose lo12 precision, but this never occurs in practice.
+                let val_cast: i32 = i32::try_from(value).map_err(|_| ImpossibleRelocation {})?;
+                if val_cast & 3 != 0 { return Err(ImpossibleRelocation {}); }
+                if (value as i64) < -0x8000_0800_i64 || (value as i64) > 0x7FFF_F7FF_i64 {
+                    return Err(ImpossibleRelocation {});
+                }
+                let val_round: u32 = (val_cast as u32).wrapping_add(0x800);
+                let instr1 = (LittleEndian::read_u32(&buf[..4]) & 0xFE00_001F)
+                    | (((val_round >> 12) & 0xF_FFFF) << 5);
+                let instr2 = (LittleEndian::read_u32(&buf[4..]) & 0xFFC0_03FF)
+                    | ((val_cast as u32 & 0xFFF) << 10);
+                LittleEndian::write_u32(&mut buf[..4], instr1);
+                LittleEndian::write_u32(&mut buf[4..], instr2);
+                return Ok(());
+            },
+            Self::SPLIT_CALL30 => {
+                // pcaddu12i ra, hi20; jirl ra, ra, lo10
+                // hi20 = val[31:12] at bits [24:5] of first inst (setJ20, no compensation)
+                // lo10 = val[11:2] at bits [25:10] of second inst (setK16)
+                // Range: 32-bit signed, 4-byte aligned
+                let val_cast: i32 = i32::try_from(value).map_err(|_| ImpossibleRelocation {})?;
+                if val_cast & 3 != 0 { return Err(ImpossibleRelocation {}); }
+                let hi20: u32 = ((val_cast as u32) >> 12) & 0xF_FFFF;
+                let lo10: u32 = ((val_cast as u32) >> 2) & 0x3FF;
+                let instr1 = (LittleEndian::read_u32(&buf[..4]) & 0xFE00_001F) | (hi20 << 5);
+                let instr2 = (LittleEndian::read_u32(&buf[4..]) & 0xFC00_03FF) | (lo10 << 10);
+                LittleEndian::write_u32(&mut buf[..4], instr1);
+                LittleEndian::write_u32(&mut buf[4..], instr2);
+                return Ok(());
+            },
+            Self::SPLIT_CALL36 => {
+                // pcaddu18i ra, hi20; jirl ra, ra, lo16
+                // hi20 = (val+0x20000)[37:18] at bits [24:5] of first inst (setJ20, +0x20000 comp)
+                // lo16 = val[17:2] at bits [25:10] of second inst (setK16)
+                // Range: 38-bit signed (with compensation), 4-byte aligned
+                let val_cast: i64 = i64::try_from(value).map_err(|_| ImpossibleRelocation {})?;
+                if val_cast & 3 != 0 { return Err(ImpossibleRelocation {}); }
+                let compensated: i64 = val_cast + 0x20000;
+                if !fits_signed_bitfield(compensated, 38) { return Err(ImpossibleRelocation {}); }
+                let hi20: u32 = (((compensated as u64) >> 18) & 0xF_FFFF) as u32;
+                let lo16: u32 = (((val_cast as u64) >> 2) & 0xFFFF) as u32;
+                let instr1 = (LittleEndian::read_u32(&buf[..4]) & 0xFE00_001F) | (hi20 << 5);
+                let instr2 = (LittleEndian::read_u32(&buf[4..]) & 0xFC00_03FF) | (lo16 << 10);
+                LittleEndian::write_u32(&mut buf[..4], instr1);
+                LittleEndian::write_u32(&mut buf[4..], instr2);
+                return Ok(());
+            },
+            _ => {},
+        }
+
         let mask = self.op_mask();
         let template = LittleEndian::read_u32(buf) & mask;
 
@@ -202,6 +278,50 @@ impl Relocation for LoongArchRelocation {
         if let Self::Plain(s) = self {
             return s.read_value(buf);
         };
+
+        // SPLIT relocations read across two instructions
+        match self {
+            Self::SPLIT_PCALA => {
+                let instr1 = LittleEndian::read_u32(&buf[..4]);
+                let instr2 = LittleEndian::read_u32(&buf[4..]);
+                let hi: u64 = (((instr1 >> 5) & 0xF_FFFF) as u64) << 12;
+                let mut lo: u32 = ((instr2 >> 10) & 0xFFF);
+                lo = (lo ^ 0x800).wrapping_sub(0x800);  // sign-extend 12→32
+                let unpacked = hi.wrapping_add(lo as u64);
+                // 32-bit sign extension
+                let offset = 1u64 << 31;
+                let value: u64 = (unpacked ^ offset).wrapping_sub(offset);
+                return value as i64 as isize;
+            },
+            Self::SPLIT_CALL30 => {
+                // pcaddu12i + jirl: hi20 = val[31:12], lo10 = val[11:2]
+                let instr1 = LittleEndian::read_u32(&buf[..4]);
+                let instr2 = LittleEndian::read_u32(&buf[4..]);
+                let hi20: u64 = (((instr1 >> 5) & 0xF_FFFF) as u64) << 12;
+                let lo10: u64 = (((instr2 >> 10) & 0x3FF) as u64) << 2;
+                let unpacked = hi20 | lo10;
+                // 32-bit sign extension
+                let offset = 1u64 << 31;
+                let value: u64 = (unpacked ^ offset).wrapping_sub(offset);
+                return value as i64 as isize;
+            },
+            Self::SPLIT_CALL36 => {
+                // pcaddu18i + jirl: hi20 and lo16 are independently sign-extended.
+                // hi20 undergoes SE20→64 (pcaddu18i), lo16 undergoes SE16→64 (jirl).
+                // val = SE20(hi20) << 18 + SE16(lo16) << 2
+                let instr1 = LittleEndian::read_u32(&buf[..4]);
+                let instr2 = LittleEndian::read_u32(&buf[4..]);
+                let hi20_raw: u64 = ((instr1 >> 5) & 0xF_FFFF) as u64;
+                let lo16_raw: u64 = ((instr2 >> 10) & 0xFFFF) as u64;
+                // Independent sign extensions
+                let hi20_se: i64 = ((hi20_raw ^ (1u64 << 19)).wrapping_sub(1u64 << 19)) as i64;
+                let lo16_se: i64 = ((lo16_raw ^ (1u64 << 15)).wrapping_sub(1u64 << 15)) as i64;
+                let value: i64 = (hi20_se << 18) + (lo16_se << 2);
+                return value as isize;
+            },
+            _ => {},
+        }
+
         let mask = !self.op_mask();
         let value = LittleEndian::read_u32(buf);
         let unpacked = match self {
@@ -242,6 +362,7 @@ impl Relocation for LoongArchRelocation {
             Self::PCALA_HI20 => u64::from(
                 (value & mask) >> 5
             ) << 12,
+            Self::SPLIT_PCALA | Self::SPLIT_CALL30 | Self::SPLIT_CALL36 => unreachable!(),  // handled above in early return
             Self::Plain(_) => unreachable!(),
         };
 
@@ -258,6 +379,7 @@ impl Relocation for LoongArchRelocation {
             Self::SI12 => 12,
             Self::PCALA_LO12 => 12,
             Self::PCALA_HI20 => 32,
+            Self::SPLIT_PCALA | Self::SPLIT_CALL30 | Self::SPLIT_CALL36 => unreachable!(),  // handled above in early return
             Self::Plain(_) => unreachable!(),
         };
         let offset = 1u64 << (bits - 1);
@@ -415,6 +537,9 @@ mod tests {
         (14, || LoongArchRelocation::PCADD_SHIFT2),
         (15, || LoongArchRelocation::PCADD_SHIFT12),
         (16, || LoongArchRelocation::PCADD_SHIFT18),
+        (17, || LoongArchRelocation::SPLIT_PCALA),
+        (18, || LoongArchRelocation::SPLIT_CALL30),
+        (19, || LoongArchRelocation::SPLIT_CALL36),
     ];
 
     #[test]
@@ -607,5 +732,142 @@ mod tests {
         // si20 = (0x1000 + 0x800) >> 12 = 1, so recovered = 1 << 12 = 0x1000
         assert_eq!(recovered, value,
             "PCALA_HI20 roundtrip should recover offset (with compensation)");
+    }
+
+    // --- SPLIT_PCALA tests ---
+    // SPLIT_PCALA patches across pcalau12i + addi.d (8 bytes).
+    // hi20 = (val + 0x800)[31:12] at bits [24:5] of first inst,
+    // lo12 = val[11:0] at bits [21:10] of second inst.
+
+    /// SPLIT_PCALA write/read roundtrip with a positive value.
+    #[test]
+    fn test_split_pcala_positive_roundtrip() {
+        let reloc = LoongArchRelocation::SPLIT_PCALA;
+        // value = 0x12340: 4-byte aligned, hi20 = (0x12340 + 0x800) >> 12 = 0x12C, lo12 = 0x340
+        let value: isize = 0x12340;
+        let mut buf = [0u8; 8];
+        LittleEndian::write_u32(&mut buf[..4], 0x1A00_0000);
+        LittleEndian::write_u32(&mut buf[4..], 0x02C0_0000);
+        reloc.write_value(&mut buf, value).unwrap();
+        let recovered = reloc.read_value(&buf);
+        assert_eq!(recovered, value,
+            "SPLIT_PCALA roundtrip should recover positive offset 0x{:X}", value);
+    }
+
+    /// SPLIT_PCALA roundtrip with a negative value (lo12 causes carry into hi20).
+    #[test]
+    fn test_split_pcala_negative_roundtrip() {
+        let reloc = LoongArchRelocation::SPLIT_PCALA;
+        // value = -4: hi20 = (-4 + 0x800) >> 12 = 0x7FC/0x7FC..., lo12 = -4 & 0xFFF = 0xFFC
+        let value: isize = -4;
+        let mut buf = [0u8; 8];
+        LittleEndian::write_u32(&mut buf[..4], 0x1A00_0000);
+        LittleEndian::write_u32(&mut buf[4..], 0x02C0_0000);
+        reloc.write_value(&mut buf, value).unwrap();
+        let recovered = reloc.read_value(&buf);
+        assert_eq!(recovered, value,
+            "SPLIT_PCALA roundtrip should recover negative offset {}", value);
+    }
+
+    /// SPLIT_PCALA roundtrip with a large positive value within range.
+    #[test]
+    fn test_split_pcala_large_roundtrip() {
+        let reloc = LoongArchRelocation::SPLIT_PCALA;
+        // value = 0x7FFF_F7FC: close to max (0x7FFF_F7FF), 4-byte aligned
+        let value: isize = 0x7FFF_F7FC;
+        let mut buf = [0u8; 8];
+        LittleEndian::write_u32(&mut buf[..4], 0x1A00_0000);
+        LittleEndian::write_u32(&mut buf[4..], 0x02C0_0000);
+        reloc.write_value(&mut buf, value).unwrap();
+        let recovered = reloc.read_value(&buf);
+        assert_eq!(recovered, value,
+            "SPLIT_PCALA roundtrip should recover large positive offset 0x{:X}", value);
+    }
+
+    /// SPLIT_PCALA should reject non-4-byte-aligned values.
+    #[test]
+    fn test_split_pcala_alignment_check() {
+        let reloc = LoongArchRelocation::SPLIT_PCALA;
+        let mut buf = [0u8; 8];
+        LittleEndian::write_u32(&mut buf[..4], 0x1A00_0000);
+        LittleEndian::write_u32(&mut buf[4..], 0x02C0_0000);
+        let result = reloc.write_value(&mut buf, 3);  // not 4-byte aligned
+        assert!(result.is_err(), "SPLIT_PCALA should reject non-4-byte-aligned value");
+    }
+
+    #[test]
+    fn test_split_call30_positive_roundtrip() {
+        let reloc = LoongArchRelocation::SPLIT_CALL30;
+        // pcaddu12i $r1 template: opcode 0b00011100 at bits [31:25], rd=1 at bits [4:0]
+        // jirl $r1, $r1 template: opcode 0b01001100 at bits [31:26], rd=1 at bits [4:0], rj=1 at bits [9:5]
+        let mut buf = [0u8; 8];
+        LittleEndian::write_u32(&mut buf[..4], 0x1C00_0001);  // pcaddu12i $r1
+        LittleEndian::write_u32(&mut buf[4..], 0x4C00_0021);  // jirl $r1, $r1
+
+        let value: isize = 0x12340;  // positive, 4-byte aligned
+        reloc.write_value(&mut buf, value).unwrap();
+        let read_back = reloc.read_value(&buf);
+        assert_eq!(read_back, value);
+    }
+
+    #[test]
+    fn test_split_call30_negative_roundtrip() {
+        let reloc = LoongArchRelocation::SPLIT_CALL30;
+        let mut buf = [0u8; 8];
+        LittleEndian::write_u32(&mut buf[..4], 0x1C00_0001);
+        LittleEndian::write_u32(&mut buf[4..], 0x4C00_0021);
+
+        let value: isize = -0x10000;  // negative, 4-byte aligned
+        reloc.write_value(&mut buf, value).unwrap();
+        let read_back = reloc.read_value(&buf);
+        assert_eq!(read_back, value);
+    }
+
+    #[test]
+    fn test_split_call30_alignment_check() {
+        let reloc = LoongArchRelocation::SPLIT_CALL30;
+        let mut buf = [0u8; 8];
+        LittleEndian::write_u32(&mut buf[..4], 0x1C00_0001);
+        LittleEndian::write_u32(&mut buf[4..], 0x4C00_0021);
+        let result = reloc.write_value(&mut buf, 5);  // not 4-byte aligned
+        assert!(result.is_err(), "SPLIT_CALL30 should reject non-4-byte-aligned value");
+    }
+
+    #[test]
+    fn test_split_call36_positive_roundtrip() {
+        let reloc = LoongArchRelocation::SPLIT_CALL36;
+        // pcaddu18i $r1 template: opcode 0b00011110 at bits [31:25], rd=1 at bits [4:0]
+        // jirl $r1, $r1 template: opcode 0b01001100 at bits [31:26], rd=1 at bits [4:0], rj=1 at bits [9:5]
+        let mut buf = [0u8; 8];
+        LittleEndian::write_u32(&mut buf[..4], 0x1E00_0001);  // pcaddu18i $r1
+        LittleEndian::write_u32(&mut buf[4..], 0x4C00_0021);  // jirl $r1, $r1
+
+        let value: isize = 0x12340;  // positive, 4-byte aligned
+        reloc.write_value(&mut buf, value).unwrap();
+        let read_back = reloc.read_value(&buf);
+        assert_eq!(read_back, value);
+    }
+
+    #[test]
+    fn test_split_call36_negative_roundtrip() {
+        let reloc = LoongArchRelocation::SPLIT_CALL36;
+        let mut buf = [0u8; 8];
+        LittleEndian::write_u32(&mut buf[..4], 0x1E00_0001);
+        LittleEndian::write_u32(&mut buf[4..], 0x4C00_0021);
+
+        let value: isize = -0x20000;  // negative, 4-byte aligned
+        reloc.write_value(&mut buf, value).unwrap();
+        let read_back = reloc.read_value(&buf);
+        assert_eq!(read_back, value);
+    }
+
+    #[test]
+    fn test_split_call36_alignment_check() {
+        let reloc = LoongArchRelocation::SPLIT_CALL36;
+        let mut buf = [0u8; 8];
+        LittleEndian::write_u32(&mut buf[..4], 0x1E00_0001);
+        LittleEndian::write_u32(&mut buf[4..], 0x4C00_0021);
+        let result = reloc.write_value(&mut buf, 5);  // not 4-byte aligned
+        assert!(result.is_err(), "SPLIT_CALL36 should reject non-4-byte-aligned value");
     }
 }

@@ -147,6 +147,9 @@ fn format_constraints(data: &Opdata) -> String {
                                 Relocation::B26 => constraints.push("26-bit offset, 2-byte aligned".to_string()),
                                 Relocation::PCALA_LO12 => constraints.push("12-bit PC-relative offset".to_string()),
                                 Relocation::PCALA_HI20 => constraints.push("20-bit PC-relative high offset".to_string()),
+                                Relocation::SPLIT_PCALA => constraints.push("32-bit SPLIT PC-relative offset (8 bytes)".to_string()),
+                                Relocation::SPLIT_CALL30 => constraints.push("32-bit SPLIT call offset, CALL30 (8 bytes)".to_string()),
+                                Relocation::SPLIT_CALL36 => constraints.push("38-bit SPLIT call offset, CALL36 (8 bytes)".to_string()),
                                 _ => (),
                             },
             Command::Next | Command::Repeat => (),
@@ -171,6 +174,20 @@ fn format_constraints(data: &Opdata) -> String {
                 let s = format!("1 <= value <= {}", 1u32 << bitlen);
                 constraints.push(s);
             },
+            Command::BitRange(_, bits, offset) => {
+                let s = format!("{}-bit field at value offset {}", bits, offset);
+                constraints.push(s);
+            },
+            Command::RBitRange(_, bits, offset) => {
+                let s = format!("{}-bit rounded field at value offset {}", bits, offset);
+                constraints.push(s);
+            },
+            Command::BigImm(bits) => {
+                let s = format!("{}-bit immediate", bits);
+                constraints.push(s);
+            },
+            Command::LiW32 => constraints.push("32-bit immediate (lu12i.w + ori)".to_string()),
+            Command::LiD64 => constraints.push("64-bit immediate (4-instruction sequence)".to_string()),
         }
     }
 
@@ -298,6 +315,9 @@ fn extract_constraints(data: &Opdata) -> Vec<String> {
             Command::Offset(Relocation::SI12) => format!("Range(-{}, {}, {})", 1u64<<11, 1u64<<11, 1),
             Command::Offset(Relocation::PCALA_LO12) => format!("Range(-{}, {}, {})", 1u64<<11, 1u64<<11, 1),
             Command::Offset(Relocation::PCALA_HI20) => format!("Range(-{}, {}, {})", 1u64<<31, 1u64<<31, 4096),
+            Command::Offset(Relocation::SPLIT_PCALA) => format!("Range(-0x80000800, 0x7FFFF7FF, 4)"),
+            Command::Offset(Relocation::SPLIT_CALL30) => format!("Range(-{}, {}, {})", 1u64<<31, 1u64<<31, 4),
+            Command::Offset(Relocation::SPLIT_CALL36) => format!("Range(-{}, {}, {})", 1u64<<37, 1u64<<37, 4),
             // TODO: is this need?
             Command::Offset(Relocation::LITERAL32) => format!("Range(-{}, {}, {})", 1<<31, 1<<31, 1),
             Command::Offset(Relocation::LITERAL64) => format!("Range(-{}, {}, {})", 1u64<<63, 1u64<<63, 1),
@@ -335,7 +355,19 @@ fn extract_constraints(data: &Opdata) -> Vec<String> {
             },
             Command::Usubone(_, bitlen) => {
                 format!("Range(1, {}, {})", (1u32 << bitlen) + 1, 1)
+            },
+            Command::BitRange(_, bits, offset) => {
+                format!("BitRange({}-bit field at value offset {})", bits, offset)
+            },
+            Command::RBitRange(_, bits, offset) => {
+                format!("RBitRange({}-bit rounded field at value offset {})", bits, offset)
+            },
+            Command::BigImm(bits) => {
+                format!("BigImm({}-bit immediate)", bits)
             }
+,
+            Command::LiW32 => format!("LiW32(32-bit immediate)"),
+            Command::LiD64 => format!("LiD64(64-bit immediate)")
         };
         constraints.push(format!("{}: {}", arg_idx, constraint));
         arg_idx += 1;

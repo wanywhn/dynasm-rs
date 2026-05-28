@@ -9,7 +9,8 @@ use proc_macro2::{TokenStream, Span};
 use proc_macro_error2::emit_error;
 
 use crate::parse_helpers::{as_signed_number, as_unsigned_number};
-use crate::common::{Stmt, Size, delimited, bitmask};
+use crate::common::{Stmt, Size, delimited, bitmask, bitmask64};
+use proc_macro2::Literal;
 
 /// Compile a single instruction. Input is taken from `data`, containing both the arguments
 /// and the encoding template and commands.
@@ -27,8 +28,8 @@ pub(super) fn compile_instruction(ctx: &mut Context, data: MatchData) -> Result<
     // Any relocation will be encoded in this list
     let mut relocations = Vec::new();
 
-    for (_i, command) in data.data.commands.iter().enumerate(){
-        // meta commands
+    for (i, command) in data.data.commands.iter().enumerate(){
+        // meta commands — don't access args, just adjust cursor
         match *command {
             Command::Repeat => {
                 cursor -= 1;
@@ -36,6 +37,10 @@ pub(super) fn compile_instruction(ctx: &mut Context, data: MatchData) -> Result<
             },
             Command::Next => {
                 cursor += 1;
+                continue;
+            },
+            Command::BitRange(_, _, _) | Command::RBitRange(_, _, _) => {
+                // Encoding commands consumed by gather_fields; don't access args or advance cursor
                 continue;
             },
             _ => ()
@@ -250,6 +255,81 @@ Command::SImm(offset, bitlen) => {
                                         let arr = &[5, 20];
                                         fun_name(&mut statics, &mut dynamics, value, arr, 12)?;
                                     },
+                                    Relocation::SPLIT_PCALA => {
+                                        // SPLIT relocation: pcalau12i + addi.d pair (8 bytes)
+                                        // hi20 with +0x800 rounding at bits [24:5] of first inst
+                                        // lo12 at bits [21:10] of second inst (+32 bit offset)
+                                        let static_val = as_signed_number(value);
+                                        if let Some(sv) = static_val {
+                                            // Static: compute hi20 with +0x800 compensation and lo12 directly
+                                            let compensated = sv + 0x800;
+                                            if (compensated >> 12) < -524288 || (compensated >> 12) > 524287 {
+                                                emit_error!(value, "SPLIT_PCALA immediate out of range");
+                                                return Err(None);
+                                            }
+                                            let hi20: u32 = ((compensated as i64 >> 12) as u32) & 0xF_FFFF;
+                                            let lo12: u32 = (sv as u32) & 0xFFF;
+                                            statics.push((5, hi20));      // first inst, bits [24:5]
+                                            statics.push((42, lo12));     // second inst (10+32), bits [21:10]
+                                        } else {
+                                            // Dynamic: emit runtime computation
+                                            let hi20_mask: u32 = 0xF_FFFF;
+                                            let lo12_mask: u32 = 0xFFF;
+                                            dynamics.push((5, quote_spanned!{ value.span()=>
+                                                ((({let _v: i32 = #value; _v.wrapping_add(0x800)} as u32) >> 12) & #hi20_mask)
+                                            }));
+                                            dynamics.push((42, quote_spanned!{ value.span()=>
+                                                ((#value as u32) & #lo12_mask)
+                                            }));
+                                        }
+                                    },
+                                    Relocation::SPLIT_CALL30 => {
+                                        // pcaddu12i + jirl pair (8 bytes)
+                                        // hi20 = val[31:12] at bits [24:5] of first inst (no compensation)
+                                        // lo10 = val[11:2] at bits [25:10] of second inst
+                                        let static_val = as_signed_number(value);
+                                        if let Some(sv) = static_val {
+                                            let hi20: u32 = ((sv as u32) >> 12) & 0xF_FFFF;
+                                            let lo10: u32 = ((sv as u32) >> 2) & 0x3FF;
+                                            statics.push((5, hi20));      // first inst, bits [24:5]
+                                            statics.push((42, lo10));     // second inst (10+32), bits [25:10]
+                                        } else {
+                                            let hi20_mask: u32 = 0xF_FFFF;
+                                            let lo10_mask: u32 = 0x3FF;
+                                            dynamics.push((5, quote_spanned!{ value.span()=>
+                                                ((#value as u32) >> 12) & #hi20_mask
+                                            }));
+                                            dynamics.push((42, quote_spanned!{ value.span()=>
+                                                ((#value as u32) >> 2) & #lo10_mask
+                                            }));
+                                        }
+                                    },
+                                    Relocation::SPLIT_CALL36 => {
+                                        // pcaddu18i + jirl pair (8 bytes)
+                                        // hi20 = (val+0x20000)[37:18] at bits [24:5] of first inst (+0x20000 compensation)
+                                        // lo16 = val[17:2] at bits [25:10] of second inst
+                                        let static_val = as_signed_number(value);
+                                        if let Some(sv) = static_val {
+                                            let compensated = sv as i64 + 0x20000;
+                                            if compensated >> 18 < -524288 || compensated >> 18 > 524287 {
+                                                emit_error!(value, "SPLIT_CALL36 immediate out of range");
+                                                return Err(None);
+                                            }
+                                            let hi20: u32 = ((compensated as u32) >> 18) & 0xF_FFFF;
+                                            let lo16: u32 = ((sv as u32) >> 2) & 0xFFFF;
+                                            statics.push((5, hi20));      // first inst, bits [24:5]
+                                            statics.push((42, lo16));     // second inst (10+32), bits [25:10]
+                                        } else {
+                                            let hi20_mask: u32 = 0xF_FFFF;
+                                            let lo16_mask: u32 = 0xFFFF;
+                                            dynamics.push((5, quote_spanned!{ value.span()=>
+                                                ((({let _v: i64 = #value as i64; _v.wrapping_add(0x20000)} as u32) >> 18) & #hi20_mask)
+                                            }));
+                                            dynamics.push((42, quote_spanned!{ value.span()=>
+                                                ((#value as u32) >> 2) & #lo16_mask
+                                            }));
+                                        }
+                                    },
                                 }
 
                             },
@@ -276,6 +356,106 @@ Command::SImm(offset, bitlen) => {
                 Command::Rno0(_) |Command::F(_) | Command::C(_) |
                 Command::T(_) | Command::V(_) | Command::X(_) | Command::FCSR(_) |
                 Command::Ufields(_) => panic!("Invalid argument processor, arg:{:?}, command:{:?}", arg, command),
+
+                // BigImm declares that the immediate is wider than 32 bits, enabling
+                // BitRange/RBitRange to extract different bit ranges across multi-instruction templates.
+                Command::BigImm(bits) => {
+                    let span = value.span();
+                    let range = bitmask64(bits);
+                    let min: i64 = (-1) << (bits - 1);
+
+                    let mut imm_encoder = ImmediateEncoder::new(value);
+                    imm_encoder.gather_fields(data.data.commands, i + 1, &mut statics);
+
+                    match imm_encoder.static_value {
+                        Some(static_value) => {
+                            if static_value < min {
+                                emit_error!(span, "Immediate too low");
+                                return Err(None);
+                            }
+                            if static_value.wrapping_sub(min) as u64 > range {
+                                emit_error!(span, "Immediate too high");
+                                return Err(None);
+                            }
+                        },
+                        None => {
+                            let check = quote_spanned!{ span =>
+                                _dyn_imm.wrapping_sub(#min) as u64 > #range
+                            };
+                            imm_encoder.emit_dynamic(true, true, check, &mut dynamics);
+                        }
+                    }
+                },
+
+                // BitRange/RBitRange are encoding commands consumed by gather_fields
+                // (handled as meta commands at loop top, never reached here)
+                Command::BitRange(_, _, _) | Command::RBitRange(_, _, _) =>(),
+
+                // li.w pseudo-instruction: lu12i.w + ori with +0x800 compensation
+                Command::LiW32 => {
+                    // hi20 = (imm + 0x800) >> 12 at bits [24:5] of first inst (lu12i.w)
+                    // lo12 = imm & 0xFFF at bits [21:10] of second inst (ori)
+                    let static_val = as_signed_number(value);
+                    if let Some(sv) = static_val {
+                        let compensated = sv + 0x800;
+                        if (compensated >> 12) < -524288 || (compensated >> 12) > 524287 {
+                            emit_error!(value, "li.w immediate out of 32-bit range");
+                            return Err(None);
+                        }
+                        let hi20: u32 = ((compensated as i64 >> 12) as u32) & 0xF_FFFF;
+                        let lo12: u32 = (sv as u32) & 0xFFF;
+                        statics.push((5, hi20));      // first inst, bits [24:5]
+                        statics.push((42, lo12));     // second inst (10+32), bits [21:10]
+                    } else {
+                        let hi20_mask: u32 = 0xF_FFFF;
+                        let lo12_mask: u32 = 0xFFF;
+                        dynamics.push((5, quote_spanned!{ value.span()=>
+                            ((({let _v: i32 = #value; _v.wrapping_add(0x800)} as u32) >> 12) & #hi20_mask)
+                        }));
+                        dynamics.push((42, quote_spanned!{ value.span()=>
+                            ((#value as u32) & #lo12_mask)
+                        }));
+                    }
+                },
+
+                // li.d pseudo-instruction: 4-instruction sequence (lu12i.w + ori + lu32i.d + lu52i.d)
+                // hi20_0 = (imm + 0x800)[31:12] at bits [24:5] of inst1 (lu12i.w, +0x800 compensation)
+                // lo12_0 = imm[11:0] at bits [21:10] of inst2 (ori)
+                // hi20_1 = imm[51:32] at bits [24:5] of inst3 (lu32i.d, no compensation)
+                // hi12_2 = imm[63:52] at bits [21:10] of inst4 (lu52i.d)
+                Command::LiD64 => {
+                    let span = value.span();
+                    let static_val = as_signed_number(value);
+                    if let Some(sv) = static_val {
+                        // hi20_0 with +0x800 compensation for lu12i.w
+                        let compensated_lo = sv as i64 + 0x800;
+                        let hi20_0: u32 = ((compensated_lo >> 12) as u32) & 0xF_FFFF;
+                        let lo12_0: u32 = ((sv as i64) as u32) & 0xFFF;
+                        // hi20_1 for lu32i.d (bits [51:32] of the 64-bit value)
+                        let hi20_1: u32 = ((sv as i64 >> 32) as u32) & 0xF_FFFF;
+                        // hi12_2 for lu52i.d (bits [63:52] of the 64-bit value)
+                        let hi12_2: u32 = ((sv as i64 >> 52) as u32) & 0xFFF;
+                        statics.push((5, hi20_0));        // inst1, bits [24:5]
+                        statics.push((42, lo12_0));       // inst2 (10+32), bits [21:10]
+                        statics.push((5+64, hi20_1));     // inst3 (5+64), bits [24:5]
+                        statics.push((10+96, hi12_2));    // inst4 (10+96), bits [21:10]
+                    } else {
+                        let hi20_mask: u32 = 0xF_FFFF;
+                        let lo12_mask: u32 = 0xFFF;
+                        dynamics.push((5, quote_spanned!{ span =>
+                            ((({let _v: i64 = #value as i64; _v.wrapping_add(0x800)} as u32) >> 12) & #hi20_mask)
+                        }));
+                        dynamics.push((42, quote_spanned!{ span =>
+                            ((#value as u32) & #lo12_mask)
+                        }));
+                        dynamics.push((5+64, quote_spanned!{ span =>
+                            (((#value as i64) >> 32) as u32 & #hi20_mask)
+                        }));
+                        dynamics.push((10+96, quote_spanned!{ span =>
+                            (((#value as i64) >> 52) as u32 & #lo12_mask)
+                        }));
+                    }
+                },
             },
 
             FlatArg::JumpTarget { ref jump } => match *command {
@@ -289,9 +469,9 @@ Command::SImm(offset, bitlen) => {
         }
 
         // figure out how far the cursor has to be advanced.
-        match *command {
-            _ => cursor += 1
-        }
+        // All non-meta commands advance cursor by 1 (each consumes one arg slot).
+        // BitRange/RBitRange are encoding commands consumed by gather_fields (already handled above).
+        cursor += 1;
     }
 
     // sanity
@@ -445,12 +625,43 @@ impl<'a> ImmediateEncoder<'a> {
     }
 
     #[allow(dead_code)] // gather_fields unused until multi-instruction immediate encoding is fully implemented
-    pub fn gather_fields(&mut self, commands: &[Command], index: usize, _statics: &mut Vec<(u8, u32)>) {
+    pub fn gather_fields(&mut self, commands: &[Command], mut index: usize, statics: &mut Vec<(u8, u32)>) {
         loop {
             match commands.get(index) {
+                Some(&Command::BitRange(offset, bits, scaling)) => {
+                    let mask = bitmask(bits);
+
+                    if let Some(v) = self.static_value {
+                        let slice = (v >> scaling) as u32 & mask;
+                        statics.push((offset, slice));
+
+                    } else {
+                        self.encodes.push((offset, quote_spanned!{ self.span=>
+                            ((_dyn_imm >> #scaling) as u32 & #mask)
+                        }));
+                    }
+                },
+                Some(&Command::RBitRange(offset, bits, scaling)) => {
+                    let mask = bitmask(bits);
+                    let round_offset: i64 =  1 << (scaling - 1);
+
+                    if let Some(v) = self.static_value {
+                        let slice = (v.wrapping_add(round_offset) >> scaling) as u32 & mask;
+                        statics.push((offset, slice));
+
+                    } else {
+                        // ensure we emit an unsuffixed literal for this so it works with all
+                        // types of number
+                        let round_offset = Literal::i64_unsuffixed(round_offset);
+                        self.encodes.push((offset, quote_spanned!{ self.span=>
+                            ((_dyn_imm.wrapping_add(#round_offset) >> #scaling) as u32 & #mask)
+                        }));
+                    }
+                },
                 Some(Command::Next) => break,
                 Some(_) | None => panic!("Bad encoding data, integer field sequence is not terminated"),
             }
+            index += 1;
         }
     }
 
