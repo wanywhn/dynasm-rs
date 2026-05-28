@@ -6,7 +6,7 @@ use super::ast::{ParsedInstruction, RawArg, MatchData, FlatArg, Register, RegFam
 use super::loongarchdata::{Opdata, Matcher, get_mnemonic_data};
 use super::debug::format_opdata_list;
 
-use crate::common::JumpKind;
+
 use crate::parse_helpers::{as_ident, as_signed_number};
 
 /// Try finding an appropriate instruction definition that matches the given instruction / arguments.
@@ -56,23 +56,14 @@ fn sanitize_args(args: &mut [RawArg], _target: &LoongArchTarget) -> Result<(), O
                     }
                 }
             },
-            RawArg::JumpTarget { jump } => {
-                // Handle external relocations
-                if let JumpKind::Bare(_) = jump.kind {
-                    // TODO: Implement proper relocation handling for LoongArch
-                    emit_error!(jump.span(), "External relocations not yet supported for LoongArch");
-                    return Err(None);
-                }
+            RawArg::JumpTarget { .. } => {
+                // Bare labels (extern expr) and global/local labels both supported via
+                // Jump::encode in common.rs -> serialize.rs -> runtime bare_relocation
             },
-            RawArg::LabelReference { base, span, jump } => {
+            RawArg::LabelReference { base, span, .. } => {
                 sanitize_register(base, *span)?;
                 if base.family() != RegFamily::INTEGER {
                     emit_error!(span, "Base register needs to be a regular (integer) register");
-                    return Err(None);
-                }
-                // External relocations in LabelReference not yet supported
-                if let JumpKind::Bare(_) = jump.kind {
-                    emit_error!(jump.span(), "External relocations not yet supported for LoongArch");
                     return Err(None);
                 }
             },
