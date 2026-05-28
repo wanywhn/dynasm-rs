@@ -9,6 +9,7 @@ use crate::relocations::{fits_signed_bitfield, ImpossibleRelocation, Relocation,
 /// Relocation implementation for the LoongArch architecture.
 #[derive(Debug, Clone)]
 #[allow(missing_docs)]
+#[allow(non_camel_case_types)] // Relocation names align with ELF psABI convention (R_LARCH_*)
 pub enum LoongArchRelocation {
     // Branch instructions (beq, bne, jirl)
     // 16-bit offset, 2-bit aligned.
@@ -285,7 +286,7 @@ impl Relocation for LoongArchRelocation {
                 let instr1 = LittleEndian::read_u32(&buf[..4]);
                 let instr2 = LittleEndian::read_u32(&buf[4..]);
                 let hi: u64 = (((instr1 >> 5) & 0xF_FFFF) as u64) << 12;
-                let mut lo: u32 = ((instr2 >> 10) & 0xFFF);
+                let mut lo: u32 = (instr2 >> 10) & 0xFFF;
                 lo = (lo ^ 0x800).wrapping_sub(0x800);  // sign-extend 12→32
                 let unpacked = hi.wrapping_add(lo as u64);
                 // 32-bit sign extension

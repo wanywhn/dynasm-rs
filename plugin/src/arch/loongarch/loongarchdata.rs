@@ -206,6 +206,7 @@ pub enum Command {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[allow(dead_code)] // B16/LITERAL variants unused until relocation implementation is complete (P3-1/P0-3)
+#[allow(non_camel_case_types)] // Relocation names align with ELF psABI convention (R_LARCH_*)
 pub enum Relocation {
     // Branch instructions (beq, bne, jirl)
     // 16-bit offset, 2-bit aligned.
@@ -435,8 +436,6 @@ lazy_static! {
     static ref OPMAP: HashMap<&'static str, &'static [Opdata]> = {
         use self::Relocation::*;
         use self::Template::*;
-        use self::Matcher::*;
-        use self::Command::*;
 
         static MAP: &[(&str, &[Opdata])] = &include!("opmap.rs");
 
