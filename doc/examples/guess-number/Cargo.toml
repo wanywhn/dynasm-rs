@@ -1,0 +1,11 @@
+[package]
+name = "guess-number"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "guess-number-loongarch64"
+path = "src/loongarch64.rs"
+
+[dependencies]
+dynasmrt = { path = "../../../runtime" }

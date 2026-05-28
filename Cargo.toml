@@ -9,6 +9,7 @@ members = [
     "doc/examples/bf-interpreter",
     "doc/examples/bf-jit",
     "doc/examples/hello-world",
+    "doc/examples/guess-number",
 ]
 
 [workspace.package]
