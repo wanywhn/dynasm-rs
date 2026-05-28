@@ -28,6 +28,9 @@ pub(super) fn compile_instruction(ctx: &mut Context, data: MatchData) -> Result<
     // Any relocation will be encoded in this list
     let mut relocations = Vec::new();
 
+    // Set to true when LiW32/LiD64 directly emits instructions, bypassing the template loop.
+    let mut direct_emit = false;
+
     for (i, command) in data.data.commands.iter().enumerate(){
         // meta commands — don't access args, just adjust cursor
         match *command {
@@ -391,22 +394,55 @@ Command::SImm(offset, bitlen) => {
                 // (handled as meta commands at loop top, never reached here)
                 Command::BitRange(_, _, _) | Command::RBitRange(_, _, _) =>(),
 
-                // li.w pseudo-instruction: lu12i.w + ori with +0x800 compensation
+                // li.w pseudo-instruction: adaptive instruction count for static values
+                // LLVM generatesInstSeq: ori(1), addi.w(1), lu12i.w(1), or lu12i.w+ori(2)
                 Command::LiW32 => {
-                    // hi20 = (imm + 0x800) >> 12 at bits [24:5] of first inst (lu12i.w)
-                    // lo12 = imm & 0xFFF at bits [21:10] of second inst (ori)
                     let static_val = as_signed_number(value);
                     if let Some(sv) = static_val {
-                        let compensated = sv + 0x800;
-                        if (compensated >> 12) < -524288 || (compensated >> 12) > 524287 {
-                            emit_error!(value, "li.w immediate out of 32-bit range");
-                            return Err(None);
+                        let v: i32 = sv as i32;
+                        let lo12: u32 = (v as u32) & 0xFFF;
+                        let hi20_se: i32 = v >> 12;  // sign-extended hi20
+
+                        // Case 1: Hi20 == 0 → single ori $rd, $r0, Lo12
+                        if hi20_se == 0 {
+                            let rd = extract_rd_static(&data.args);
+                            let insn = 0x03800000u32 | (rd as u32) | (lo12 << 10);
+                            ctx.state.stmts.push(Stmt::Const(u64::from(insn), Size::B_4));
+                            direct_emit = true;
                         }
-                        let hi20: u32 = ((compensated as i64 >> 12) as u32) & 0xF_FFFF;
-                        let lo12: u32 = (sv as u32) & 0xFFF;
-                        statics.push((5, hi20));      // first inst, bits [24:5]
-                        statics.push((42, lo12));     // second inst (10+32), bits [21:10]
+                        // Case 2: lo12 == 0 → single lu12i.w $rd, Hi20
+                        // (+0x800 compensation is automatic from sign extension semantics)
+                        else if lo12 == 0 {
+                            let rd = extract_rd_static(&data.args);
+                            let si20: u32 = ((v + 0x800) >> 12) as u32 & 0xF_FFFF;
+                            let insn = 0x14000000u32 | (rd as u32) | (si20 << 5);
+                            ctx.state.stmts.push(Stmt::Const(u64::from(insn), Size::B_4));
+                            direct_emit = true;
+                        }
+                        // Case 3: sign(Lo12) == sign(Hi20) → single addi.w $rd, $r0, Lo12
+                        // This handles values like -1 (0xFFFFFFFF), 0xFFFFF000, etc.
+                        // Condition: SignExtend32<1>(Lo12 >> 11) == SignExtend32<20>(Hi20)
+                        // Simplified: ((lo12 >> 11) as i32 == hi20_se's sign bit)
+                        else if ((lo12 >> 11) as i32) == (hi20_se >> 19) {
+                            let rd = extract_rd_static(&data.args);
+                            let si12: u32 = (v as u32) & 0xFFF;
+                            let insn = 0x02800000u32 | (rd as u32) | (si12 << 10);
+                            ctx.state.stmts.push(Stmt::Const(u64::from(insn), Size::B_4));
+                            direct_emit = true;
+                        }
+                        // General case: lu12i.w + ori (2 instructions via template)
+                        else {
+                            let compensated = sv + 0x800;
+                            if (compensated >> 12) < -524288 || (compensated >> 12) > 524287 {
+                                emit_error!(value, "li.w immediate out of 32-bit range");
+                                return Err(None);
+                            }
+                            let hi20: u32 = ((compensated as i64 >> 12) as u32) & 0xF_FFFF;
+                            statics.push((5, hi20));      // first inst, bits [24:5]
+                            statics.push((42, lo12));     // second inst (10+32), bits [21:10]
+                        }
                     } else {
+                        // Dynamic: always use 2-instruction template
                         let hi20_mask: u32 = 0xF_FFFF;
                         let lo12_mask: u32 = 0xFFF;
                         dynamics.push((5, quote_spanned!{ value.span()=>
@@ -418,28 +454,78 @@ Command::SImm(offset, bitlen) => {
                     }
                 },
 
-                // li.d pseudo-instruction: 4-instruction sequence (lu12i.w + ori + lu32i.d + lu52i.d)
-                // hi20_0 = (imm + 0x800)[31:12] at bits [24:5] of inst1 (lu12i.w, +0x800 compensation)
-                // lo12_0 = imm[11:0] at bits [21:10] of inst2 (ori)
-                // hi20_1 = imm[51:32] at bits [24:5] of inst3 (lu32i.d, no compensation)
-                // hi12_2 = imm[63:52] at bits [21:10] of inst4 (lu52i.d)
+                // li.d pseudo-instruction: adaptive instruction count for static values
+                // LLVM generateInstSeq produces 1-4 instructions based on value analysis
                 Command::LiD64 => {
                     let span = value.span();
                     let static_val = as_signed_number(value);
                     if let Some(sv) = static_val {
-                        // hi20_0 with +0x800 compensation for lu12i.w
-                        let compensated_lo = sv as i64 + 0x800;
-                        let hi20_0: u32 = ((compensated_lo >> 12) as u32) & 0xF_FFFF;
-                        let lo12_0: u32 = ((sv as i64) as u32) & 0xFFF;
-                        // hi20_1 for lu32i.d (bits [51:32] of the 64-bit value)
-                        let hi20_1: u32 = ((sv as i64 >> 32) as u32) & 0xF_FFFF;
-                        // hi12_2 for lu52i.d (bits [63:52] of the 64-bit value)
-                        let hi12_2: u32 = ((sv as i64 >> 52) as u32) & 0xFFF;
-                        statics.push((5, hi20_0));        // inst1, bits [24:5]
-                        statics.push((42, lo12_0));       // inst2 (10+32), bits [21:10]
-                        statics.push((5+64, hi20_1));     // inst3 (5+64), bits [24:5]
-                        statics.push((10+96, hi12_2));    // inst4 (10+96), bits [21:10]
+	                        let v: i64 = sv as i64;
+	                        // LLVM's bit decomposition:
+	                        // Highest12 = v[63:52], Higher20 = v[51:32], Hi20 = v[31:12], Lo12 = v[11:0]
+	                        let highest12: u32 = ((v as u64) >> 52) as u32 & 0xFFF;
+	                        let higher20: u32 = ((v as u64) >> 32) as u32 & 0xFFFFF;
+	                        let hi20: u32 = ((v as u64) >> 12) as u32 & 0xFFFFF;
+	                        let lo12: u32 = (v as u32) & 0xFFF;
+
+	                        // LLVM's sign-extension checks:
+	                        // SE1(x>>19) == SE20(y): if x sign bit=0 then y=0; if x sign bit=1 then y=0xFFFFF
+	                        // SE1(x>>19) == SE12(y): if x sign bit=0 then y=0; if x sign bit=1 then y=0xFFF
+	                        let skip_lu32i_d = sign_ext_1_to_20(hi20) == higher20;
+	                        let skip_lu52i_d = sign_ext_1_to_12(higher20) == highest12;
+
+	                        // Case 1: SE52(Val)==0 && Highest12!=0 -> single lu52i.d
+	                        // SE52(Val)==0 means bits[51:0] sign-extend to zero, requiring them all to be 0.
+	                        // With lo12==0, hi20==0, higher20==0, the lower 52 bits ARE all-zero.
+	                        if highest12 != 0 && lo12 == 0 && hi20 == 0 && higher20 == 0 {
+	                            let rd = extract_rd_static(&data.args);
+	                            let si12: u32 = sign_extend_12_to_32(highest12) as u32 & 0xFFF;
+	                            // lu52i.d $rd, $rd, si12 - rd starts as $r0 (value will be 0 before this inst)
+	                            // lu52i.d modifies bits[63:52] of rd, leaving bits[51:0] unchanged.
+	                            // If rd starts as 0, result is just si12 << 52. Correct for SE52==0 case.
+	                            let insn = 0x03000000u32 | (rd as u32) | ((rd as u32) << 5) | (si12 << 10);
+	                            ctx.state.stmts.push(Stmt::Const(u64::from(insn), Size::B_4));
+	                            direct_emit = true;
+	                        }
+	                        // Case 2: hi32 is sign-extension of lo32 -> use li.w logic for lo32 only
+	                        else if skip_lu32i_d && skip_lu52i_d {
+	                            emit_li_w32_adaptive_static(ctx, v, &data.args);
+	                            direct_emit = true;
+	                        }
+	                        // General case: emit lu12i.w + (ori if lo12!=0) + (lu32i.d if needed) + (lu52i.d if needed)
+	                        else {
+	                            let rd = extract_rd_static(&data.args);
+	                            let rd_u32 = rd as u32;
+
+	                            // lu12i.w $rd, hi20_0 (with +0x800 compensation)
+	                            let compensated = v + 0x800;
+	                            let si20_0: u32 = ((compensated >> 12) as u32) & 0xF_FFFF;
+	                            let insn0 = 0x14000000u32 | rd_u32 | (si20_0 << 5);
+	                            ctx.state.stmts.push(Stmt::Const(u64::from(insn0), Size::B_4));
+
+	                            // ori $rd, $rd, lo12 (only if lo12 != 0)
+	                            if lo12 != 0 {
+	                                let insn1 = 0x03800000u32 | rd_u32 | (rd_u32 << 5) | (lo12 << 10);
+	                                ctx.state.stmts.push(Stmt::Const(u64::from(insn1), Size::B_4));
+	                            }
+
+	                            // lu32i.d $rd, higher20 (only if not sign-extension of hi20)
+	                            if !skip_lu32i_d {
+	                                let si20_1: u32 = higher20 & 0xF_FFFF;
+	                                let insn2 = 0x16000000u32 | rd_u32 | (si20_1 << 5);
+	                                ctx.state.stmts.push(Stmt::Const(u64::from(insn2), Size::B_4));
+	                            }
+
+	                            // lu52i.d $rd, $rd, highest12 (only if not sign-extension of higher20)
+	                            if !skip_lu52i_d {
+	                                let si12_2: u32 = sign_extend_12_to_32(highest12) as u32 & 0xFFF;
+	                                let insn3 = 0x03000000u32 | rd_u32 | (rd_u32 << 5) | (si12_2 << 10);
+	                                ctx.state.stmts.push(Stmt::Const(u64::from(insn3), Size::B_4));
+	                            }
+	                            direct_emit = true;
+	                        }
                     } else {
+                        // Dynamic: always use 4-instruction template
                         let hi20_mask: u32 = 0xF_FFFF;
                         let lo12_mask: u32 = 0xFFF;
                         dynamics.push((5, quote_spanned!{ span =>
@@ -477,6 +563,12 @@ Command::SImm(offset, bitlen) => {
     // sanity
     if cursor != data.args.len() {
         panic!("Not enough command processors");
+    }
+
+    // If LiW32/LiD64 directly emitted instructions, skip the template loop
+    if direct_emit {
+        ctx.state.stmts.extend(relocations);
+        return Ok(());
     }
 
     let mut templates = [0u32; 8];
@@ -747,6 +839,73 @@ impl<'a> ImmediateEncoder<'a> {
                 }));
             }
         }
+    }
+}
+
+/// Extract the static rd register code from the first argument (assumed to be FlatArg::Register::Static).
+/// Returns 0 for r0, 1 for r1, etc.
+fn extract_rd_static(args: &[FlatArg]) -> u8 {
+    match args.first() {
+        Some(FlatArg::Register { reg: Register::Static(id), .. }) => id.code(),
+        _ => panic!("li.w/li.d first argument must be a static register"),
+    }
+}
+
+/// Sign-extend a 12-bit value to i32.
+fn sign_extend_12_to_32(val: u32) -> i32 {
+    ((val ^ (1 << 11)).wrapping_sub(1 << 11)) as i32
+}
+
+/// Sign-extend a 20-bit value to i32.
+#[allow(dead_code)]
+fn sign_extend_20_to_32(val: u32) -> i32 {
+    ((val ^ (1 << 19)).wrapping_sub(1 << 19)) as i32
+}
+
+/// LLVM SE1(x>>19) == SE20(y) check: 1-bit sign extension must match 20-bit value.
+/// If x's sign bit (bit 19) is 0, y must be 0; if x's sign bit is 1, y must be 0xFFFFF.
+fn sign_ext_1_to_20(x: u32) -> u32 {
+    if x & (1 << 19) != 0 { 0xFFFFF } else { 0 }
+}
+
+/// LLVM SE1(x>>19) == SE12(y) check: 1-bit sign extension must match 12-bit value.
+/// If x's sign bit (bit 19) is 0, y must be 0; if x's sign bit is 1, y must be 0xFFF.
+fn sign_ext_1_to_12(x: u32) -> u32 {
+    if x & (1 << 19) != 0 { 0xFFF } else { 0 }
+}
+
+/// Emit the lo32 portion of a 64-bit immediate using li.w adaptive logic.
+/// Produces 1 or 2 instructions (ori, addi.w, lu12i.w, or lu12i.w+ori).
+/// The sign extension of lo32 will fill the hi32 bits automatically.
+fn emit_li_w32_adaptive_static(ctx: &mut Context, v: i64, args: &[FlatArg]) {
+    let rd = extract_rd_static(args);
+    let rd_u32 = rd as u32;
+    let lo32: i32 = v as i32;
+    let lo12: u32 = (lo32 as u32) & 0xFFF;
+    let hi20_se: i32 = lo32 >> 12;
+
+    if hi20_se == 0 {
+        // Case: val fits in 12 unsigned bits → single ori
+        let insn = 0x03800000u32 | rd_u32 | (lo12 << 10);
+        ctx.state.stmts.push(Stmt::Const(u64::from(insn), Size::B_4));
+    } else if lo12 == 0 {
+        // Case: lo12=0 → single lu12i.w (with +0x800 compensation)
+        let si20: u32 = ((lo32 + 0x800) >> 12) as u32 & 0xF_FFFF;
+        let insn = 0x14000000u32 | rd_u32 | (si20 << 5);
+        ctx.state.stmts.push(Stmt::Const(u64::from(insn), Size::B_4));
+    } else if ((lo12 >> 11) as i32) == (hi20_se >> 19) {
+        // Case: sign(Lo12) == sign(Hi20) → single addi.w
+        let si12: u32 = (lo32 as u32) & 0xFFF;
+        let insn = 0x02800000u32 | rd_u32 | (si12 << 10);
+        ctx.state.stmts.push(Stmt::Const(u64::from(insn), Size::B_4));
+    } else {
+        // General: lu12i.w + ori
+        let compensated = lo32 + 0x800;
+        let si20: u32 = ((compensated >> 12) as u32) & 0xF_FFFF;
+        let insn0 = 0x14000000u32 | rd_u32 | (si20 << 5);
+        let insn1 = 0x03800000u32 | rd_u32 | (rd_u32 << 5) | (lo12 << 10);
+        ctx.state.stmts.push(Stmt::Const(u64::from(insn0), Size::B_4));
+        ctx.state.stmts.push(Stmt::Const(u64::from(insn1), Size::B_4));
     }
 }
 
