@@ -7,18 +7,29 @@ edition = "2021"
 [[bin]]
 name = "hello-world-x64"
 path = "src/x64.rs"
+required-features = ["x64"]
 
 [[bin]]
 name = "hello-world-aarch64"
 path = "src/aarch64.rs"
+required-features = ["aarch64"]
 
 [[bin]]
 name = "hello-world-riscv64"
 path = "src/riscv64.rs"
+required-features = ["riscv64"]
 
 [[bin]]
 name = "hello-world-loongarch64"
 path = "src/loongarch64.rs"
+required-features = ["loongarch64"]
+
+[features]
+default = ["loongarch64"]
+x64 = []
+aarch64 = []
+riscv64 = []
+loongarch64 = []
 
 [dependencies]
 
