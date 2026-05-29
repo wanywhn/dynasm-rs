@@ -30,6 +30,15 @@ pub trait Relocation {
     fn kind(&self) -> RelocationKind;
     /// Specifies the default page size on this platform.
     fn page_size() -> usize;
+    /// Returns an address compensation value for PC-relative relocations where
+    /// the instruction clears some low bits of the PC address (e.g., LoongArch
+    /// pcalau12i clears the low 12 bits). The compensation is the low bits of
+    /// the instruction's runtime address that get cleared, which must be added
+    /// to the relocation value so the encoded offset targets the correct address.
+    /// `instruction_offset` is the byte offset of the instruction within the assembly buffer.
+    fn addr_compensation(&self, _instruction_offset: usize) -> isize {
+        0
+    }
 }
 
 

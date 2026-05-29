@@ -226,7 +226,7 @@ impl Relocation for LoongArchRelocation {
                 let val_round: u32 = (val_cast as u32).wrapping_add(0x800);
                 let instr1 = (LittleEndian::read_u32(&buf[..4]) & 0xFE00_001F)
                     | (((val_round >> 12) & 0xF_FFFF) << 5);
-                let instr2 = (LittleEndian::read_u32(&buf[4..]) & 0xFFC0_03FF)
+                let instr2 = (LittleEndian::read_u32(&buf[4..]) & 0xFFC0_07FF)
                     | ((val_cast as u32 & 0xFFF) << 10);
                 LittleEndian::write_u32(&mut buf[..4], instr1);
                 LittleEndian::write_u32(&mut buf[4..], instr2);
@@ -393,6 +393,23 @@ impl Relocation for LoongArchRelocation {
     }
     fn page_size() -> usize {
         4096
+    }
+    fn addr_compensation(&self, instruction_offset: usize) -> isize {
+        // pcalau12i clears the low 12 bits of its output:
+        //   rd = (PC + SE({si20, 12'b0})) & ~0xFFF
+        // This means PC-relative offsets computed relative to PC are wrong
+        // when PC's low 12 bits are nonzero (i.e., the instruction is at a
+        // non-page-aligned offset within the JIT buffer).
+        // We compensate by adding the cleared bits (instruction_offset & 0xFFF)
+        // back into the relocation value, so the encoded si20/lo12 targets
+        // the correct absolute address rather than a page-relative offset.
+        // pcaddu12i and pcaddu18i do NOT clear bits, so they need no compensation.
+        match self {
+            Self::SPLIT_PCALA | Self::PCALA_HI20 | Self::PCALA_LO12 => {
+                (instruction_offset & 0xFFF) as isize
+            }
+            _ => 0
+        }
     }
     
 }

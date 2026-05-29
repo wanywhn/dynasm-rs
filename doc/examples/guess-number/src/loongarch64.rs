@@ -69,8 +69,8 @@ macro_rules! call_print {
         my_dynasm!($ops
             ; st.d a_current, sp, 16
             ; addi.d a1, zero, $msg
-            ; pcaddi t0, 1
-            ; ld.d t0, t0, ->print_msg
+            ; la t0, ->print_msg
+            ; ld.d t0, t0, 0
             ; jirl ra, t0, 0
             ; add.d a_ret, zero, a0
             ; ld.d a_state, sp, 8

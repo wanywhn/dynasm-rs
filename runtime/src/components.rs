@@ -340,11 +340,13 @@ impl<R: Relocation> PatchLoc<R> {
 
     /// Returns the actual value that should be inserted at the relocation site.
     pub fn value(&self, target: usize, buf_addr: usize) -> isize {
-        (match self.relocation.kind() {
-            RelocationKind::Relative => target.wrapping_sub(self.location.0 - self.ref_offset as usize),
-            RelocationKind::RelToAbs => target.wrapping_sub(self.location.0 - self.ref_offset as usize + buf_addr),
+        let instruction_offset = self.location.0 - self.ref_offset as usize;
+        let val = (match self.relocation.kind() {
+            RelocationKind::Relative => target.wrapping_sub(instruction_offset),
+            RelocationKind::RelToAbs => target.wrapping_sub(instruction_offset + buf_addr),
             RelocationKind::AbsToRel => target + buf_addr
-        }) as isize + self.target_offset
+        }) as isize + self.target_offset + self.relocation.addr_compensation(instruction_offset);
+        val
     }
 
     /// Patch `buffer` so that this relocation patch will point to `target`.
