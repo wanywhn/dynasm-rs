@@ -49,6 +49,12 @@ def main():
 
 def read_opdata_file(f):
     templates = []
+    # Special types from export that have string args (e.g. "64-bit immediate")
+    class LiD64:
+        def __init__(self, *args): pass
+    class LiW32:
+        def __init__(self, *args): pass
+    
     context = {
         'Range': Range,
         'Range2': Range2,
@@ -62,7 +68,9 @@ def read_opdata_file(f):
         'T': T,
         'FCSR': R,
         'List': List,
-        'Special': Special
+        'Special': Special,
+        'LiD64': LiD64,
+        'LiW32': LiW32,
     }
 
     for line in f:
@@ -75,7 +83,12 @@ def read_opdata_file(f):
             continue
 
         mnemonic_args = parts[0]
-        constraints = eval(parts[1], context)
+        # Fix LiD64/LiW32 export format: "LiD64(64-bit immediate)" → 'LiD64("64-bit immediate")'
+        constraints_str = parts[1]
+        import re
+        constraints_str = re.sub(r'LiD64\(([^)]+)\)', r'LiD64("\1")', constraints_str)
+        constraints_str = re.sub(r'LiW32\(([^)]+)\)', r'LiW32("\1")', constraints_str)
+        constraints = eval(constraints_str, context)
         isa = parts[2]
         extensions = parts[3] if len(parts) > 3 else ""
 

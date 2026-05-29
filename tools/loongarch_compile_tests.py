@@ -18,8 +18,8 @@ def compile_with_as(asmstring):
         f.write("\n")
 
     # 使用LoongArch工具链进行汇编
-    subprocess.run(["loongarch64-linux-gnu-as", "test.s", "-o", "test.o"], check=True)
-    subprocess.run(["loongarch64-linux-gnu-objcopy", "-O", "binary", "test.o", "test.bin"], check=True)
+    subprocess.run(["loongarch64-unknown-linux-gnu-as", "test.s", "-o", "test.o"], check=True)
+    subprocess.run(["loongarch64-unknown-linux-gnu-objcopy", "-O", "binary", "test.o", "test.bin"], check=True)
 
     with open("test.bin", "rb") as f:
         data = f.read()
